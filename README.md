@@ -71,7 +71,7 @@ echo "=== VCRT OS DEPLOY SUCCESS ==="
 ```
 
 Sau khi cài đặt thành công, truy cập:
-👉 **`http://192.168.10.1/vcrt/`**
+👉 **`http://<ip của router>/vcrt/`**
 - Tài khoản mặc định: `admin`
 - Mật khẩu mặc định: `admin`
 
