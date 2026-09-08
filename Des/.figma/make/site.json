@@ -1,0 +1,11 @@
+{
+  "title": "VCRT - Router Controller",
+  "description": "Manage your Xiaomi MiWiFi Mini router effortlessly with this mobile-first app, offering real-time monitoring, device control, and advanced security features.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
