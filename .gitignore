@@ -1,0 +1,38 @@
+# Firmware ROMs, bootloader & kernel images (large binaries)
+*.bin
+*.trx
+*.img
+*.orig
+breed-mt7620-xiaomi-mini.bin
+kwrt-*.bin
+
+# Deployment packages & binaries
+*.tar.gz
+deploy_vcrt.tar.gz
+deploy_rowa.tar.gz
+rowa*
+nextdns
+nextdns_mipsle.tar.gz
+
+# Local experimental scripts & secret configs
+telegram_bot_*.sh
+!setup_telegram_bot.sh
+*.conf
+*.key
+*.token
+*.tmp
+test_blocked.txt
+
+# Frontend dependencies & build outputs
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+
+# OS & Editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.bak
+.idea/
+.vscode/
