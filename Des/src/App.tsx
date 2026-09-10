@@ -2481,7 +2481,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
       </div>
 
       <div style={{ textAlign: "center", padding: "8px 0" }}>
-        <div style={{ fontSize: 11, color: "#10B981" }} className="mono">VCRT Controller v2.1.0 · Cập nhật NextDNS & Thời gian kết nối</div>
+        <div style={{ fontSize: 11, color: "#10B981" }} className="mono">VCRT OS v1.0.0 · Core Service & Real Hardware Engine</div>
         <div style={{ fontSize: 10, color: "#334155", marginTop: 2 }} className="mono">Xiaomi MiWiFi Mini · MediaTek MT7620A · 128MB RAM</div>
       </div>
     </div>

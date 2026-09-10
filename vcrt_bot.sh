@@ -1,7 +1,7 @@
 #!/bin/sh
 export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 # ==============================================================================
-# VCRT OS - CYBERPUNK TELEGRAM BOT & NOTIFICATION DAEMON (24/7)
+# VCRT OS v1.0.0 - CYBERPUNK TELEGRAM BOT & NOTIFICATION DAEMON (24/7)
 # Giám sát thiết bị thực tế, đo đạc lưu lượng chính xác, tự động mở mạng
 # ==============================================================================
 
@@ -54,6 +54,36 @@ send_msg() {
         --data-urlencode "text=${text}" >/dev/null 2>&1 || true
 }
 
+# ─── HELPER: QUÉT TOÀN BỘ SÓNG WI-FI PHẦN CỨNG THỜI GIAN THỰC ─────────────────
+get_wifi_stations() {
+    local devs=$(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}')
+    [ -z "$devs" ] && devs="wlan0 wlan1 phy0-ap0 phy1-ap0 ra0 rai0"
+    for ifc in $devs; do
+        case "$ifc" in *sta*|*mon*) continue ;; esac
+        local ch=$(iw dev "$ifc" info 2>/dev/null | awk '/channel/{print $2}')
+        case "$ch" in ''|*[!0-9]*) ch=6 ;; esac
+        local b="2.4GHz"
+        [ "$ch" -gt 14 ] 2>/dev/null && b="5GHz"
+
+        iw dev "$ifc" station dump 2>/dev/null | awk -v iface="$ifc" -v band="$b" '
+        /^Station/ {
+            if (mac != "") {
+                print mac "|" iface "|" sig "|" band "|" con;
+            }
+            mac = tolower($2);
+            sig = "N/A";
+            con = 0;
+        }
+        /signal:/ { sig = $2 " " $3; }
+        /connected time:/ { con = int($3); }
+        END {
+            if (mac != "") {
+                print mac "|" iface "|" sig "|" band "|" con;
+            }
+        }'
+    done
+}
+
 # ─── WATCHER 1: THEO DÕI THIẾT BỊ WI-FI MỚI (LIVE) ───────────────────────────
 watch_wifi_devices() {
     local last_macs=""
@@ -64,13 +94,9 @@ watch_wifi_devices() {
         [ "$NOTIF_WIFI_JOIN" != "1" ] && continue
         [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ] && continue
 
-        local curr_macs=""
-        for wif in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
-            case "$wif" in *sta*) continue ;; esac
-            local stas=$(iw dev "$wif" station dump 2>/dev/null | awk '/Station/{print tolower($2)}')
-            [ -n "$stas" ] && curr_macs="${curr_macs} ${stas}"
-        done
-        curr_macs=$(echo "$curr_macs" | tr ' ' '\n' | grep -E '^[0-9a-f]{2}:' | sort -u)
+        local wifi_tmp="/tmp/vcrt_wifi_watch.tmp"
+        get_wifi_stations > "$wifi_tmp" 2>/dev/null
+        local curr_macs=$(awk -F'|' '{print tolower($1)}' "$wifi_tmp" 2>/dev/null | sort -u)
 
         if [ -n "$last_macs" ]; then
             for m in $curr_macs; do
@@ -83,16 +109,14 @@ watch_wifi_devices() {
                     [ -z "$ip" ] && ip="Đang nhận IP..."
                     [ "$name" = "*" ] || [ -z "$name" ] && name="Thiết bị không tên"
 
+                    local st_match=$(grep -i "^${m}|" "$wifi_tmp" 2>/dev/null | head -n1)
+                    local w_band=$(echo "$st_match" | cut -d'|' -f4)
+                    local w_sig=$(echo "$st_match" | cut -d'|' -f3)
+
                     local band="Wi-Fi"
-                    local sig=""
-                    if iw dev phy0-ap0 station dump 2>/dev/null | grep -qi "$m"; then
-                        band="5GHz ⚡ (Tốc độ cao)"
-                        sig=$(iw dev phy0-ap0 station get "$m" 2>/dev/null | awk '/signal:/{print $2, $3}')
-                    elif iw dev phy1-ap0 station dump 2>/dev/null | grep -qi "$m"; then
-                        band="2.4GHz 📶 (Xuyên tường)"
-                        sig=$(iw dev phy1-ap0 station get "$m" 2>/dev/null | awk '/signal:/{print $2, $3}')
-                    fi
-                    [ -n "$sig" ] && band="${band} · Tín hiệu: ${sig}"
+                    [ "$w_band" = "5GHz" ] && band="5GHz ⚡ (Tốc độ cao)"
+                    [ "$w_band" = "2.4GHz" ] && band="2.4GHz 📶 (Xuyên tường)"
+                    [ -n "$w_sig" ] && [ "$w_sig" != "N/A" ] && band="${band} · Tín hiệu: ${w_sig}"
 
                     local now_str=$(date +'%H:%M:%S - %d/%m/%Y' 2>/dev/null || echo "")
                     local alert_msg="🔔 <b>THIẾT BỊ VỪA KẾT NỐI WI-FI!</b>
@@ -109,6 +133,7 @@ watch_wifi_devices() {
             done
         fi
         last_macs="$curr_macs"
+        rm -f "$wifi_tmp" 2>/dev/null || true
     done
 }
 
@@ -318,22 +343,29 @@ cmd_status() {
     [ -z "$wan_ip" ] && wan_ip=$(ip -4 addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n 1)
     [ -z "$wan_ip" ] && wan_ip=$(curl -s --max-time 2 https://api.ipify.org 2>/dev/null || echo "192.168.10.x")
 
-    # Đếm số thiết bị online THỰC TẾ
-    local wifi_5g_stas=$(iw dev phy0-ap0 station dump 2>/dev/null | awk '/Station/{print tolower($2)}')
-    local wifi_24g_stas=$(iw dev phy1-ap0 station dump 2>/dev/null | awk '/Station/{print tolower($2)}')
-    local wifi_count=$(echo "$wifi_5g_stas $wifi_24g_stas" | tr ' ' '\n' | grep -E '^[0-9a-f]{2}:' | sort -u | wc -l)
+    # Đếm số thiết bị online THỰC TẾ (100% chính xác, không trùng lặp)
+    local wifi_tmp="/tmp/vcrt_wifi_status.tmp"
+    get_wifi_stations > "$wifi_tmp" 2>/dev/null
+    local online_total=$(wc -l < "$wifi_tmp" 2>/dev/null || echo 0)
+    case "$online_total" in ''|*[!0-9]*) online_total=0 ;; esac
 
-    local lan_count=0
-    local lan_carrier=$(cat /sys/class/net/eth0/carrier 2>/dev/null || echo 0)
-    if [ "$lan_carrier" = "1" ]; then
-        lan_count=$(awk '$3=="0x2" && $6=="br-lan" {print $4}' /proc/net/arp 2>/dev/null | sort -u | wc -l)
+    # Kiểm tra thêm nếu có máy cắm dây LAN (không nằm trong Wi-Fi và phản hồi ping)
+    if [ -f /proc/net/arp ]; then
+        for l_ip in $(awk '$3=="0x2" && $6=="br-lan" {print $1}' /proc/net/arp 2>/dev/null); do
+            local l_mac=$(awk -v ip="$l_ip" '$1==ip {print tolower($4)}' /proc/net/arp 2>/dev/null | head -n1)
+            if [ -n "$l_mac" ] && ! grep -qi "^${l_mac}|" "$wifi_tmp" 2>/dev/null; then
+                if ping -c 1 -W 1 "$l_ip" >/dev/null 2>&1; then
+                    online_total=$(( online_total + 1 ))
+                fi
+            fi
+        done
     fi
-    local online_total=$(( wifi_count + lan_count ))
+    rm -f "$wifi_tmp" 2>/dev/null || true
 
     local ch_2g=$(uci -q get wireless.radio1.channel || echo "6")
     local ch_5g=$(uci -q get wireless.radio0.channel || echo "149")
 
-    local msg="⚡ <b>VCRT OS · BẢNG ĐIỀU KHIỂN ROUTER</b>
+    local msg="⚡ <b>VCRT OS v1.0.0 · BẢNG ĐIỀU KHIỂN ROUTER</b>
 ━━━━━━━━━━━━━━━━━━
 🏷 <b>Thiết bị:</b> <code>Xiaomi MiWiFi Mini (MT7620A)</code>
 ⏱ <b>Thời gian chạy:</b> <code>${up_str}</code>
@@ -350,17 +382,8 @@ cmd_status() {
 
 # ─── CMD_CLIENTS: 100% ONLINE THỰC TẾ (LỌC BỎ HOÀN TOÀN MÁY ĐÃ NGẮT KẾT NỐI) ──
 cmd_clients() {
-    local wifi_dump_5g=$(iw dev phy0-ap0 station dump 2>/dev/null)
-    local wifi_dump_24g=$(iw dev phy1-ap0 station dump 2>/dev/null)
-    local arp_data=$(cat /proc/net/arp 2>/dev/null)
-
-    local lan_ports_up=0
-    [ "$(cat /sys/class/net/eth0/carrier 2>/dev/null)" = "1" ] && lan_ports_up=1
-    if command -v swconfig >/dev/null 2>&1; then
-        local p0=$(swconfig dev switch0 port 0 get link 2>/dev/null)
-        local p1=$(swconfig dev switch0 port 1 get link 2>/dev/null)
-        echo "$p0 $p1" | grep -q "link:up" && lan_ports_up=1
-    fi
+    local wifi_tmp="/tmp/vcrt_wifi_cmd_clients.tmp"
+    get_wifi_stations > "$wifi_tmp" 2>/dev/null
 
     local dev_entries=""
     local count=0
@@ -383,38 +406,35 @@ cmd_clients() {
             echo "$name" | grep -qi "cam\|ipcam\|imou\|ezviz" && icon="📷"
             echo "$name" | grep -qi "pad\|tab" && icon="📟"
 
-            # Kiểm tra Wi-Fi 5GHz
-            if echo "$wifi_dump_5g" | grep -qi "$mac_low"; then
+            # A. Kiểm tra sóng Wi-Fi (phần cứng xác thực)
+            local w_match=$(grep -i "^${mac_low}|" "$wifi_tmp" 2>/dev/null | head -n1)
+            if [ -n "$w_match" ]; then
                 is_online=1
-                band="5GHz ⚡"
-                local st=$(iw dev phy0-ap0 station get "$mac_low" 2>/dev/null)
-                local s=$(echo "$st" | awk '/signal:/{print $2, $3}')
-                [ -n "$s" ] && sig_info=" · Sóng: <code>${s}</code>"
-
-            # Kiểm tra Wi-Fi 2.4GHz
-            elif echo "$wifi_dump_24g" | grep -qi "$mac_low"; then
-                is_online=1
-                band="2.4GHz 📶"
-                local st=$(iw dev phy1-ap0 station get "$mac_low" 2>/dev/null)
-                local s=$(echo "$st" | awk '/signal:/{print $2, $3}')
-                [ -n "$s" ] && sig_info=" · Sóng: <code>${s}</code>"
-
-            # Kiểm tra Cáp LAN cắm dây
-            elif [ "$lan_ports_up" -eq 1 ]; then
-                local a_ent=$(echo "$arp_data" | grep -i "$mac_low" | head -n1)
+                local w_band=$(echo "$w_match" | cut -d'|' -f4)
+                local w_sig=$(echo "$w_match" | cut -d'|' -f3)
+                if [ "$w_band" = "5GHz" ]; then
+                    band="5GHz ⚡"
+                else
+                    band="2.4GHz 📶"
+                fi
+                [ -n "$w_sig" ] && [ "$w_sig" != "N/A" ] && sig_info=" · Sóng: <code>${w_sig}</code>"
+            else
+                # B. Kiểm tra Cáp LAN cắm dây (Chỉ chấp nhận nếu phản hồi Ping)
+                local a_ent=$(grep -i "$mac_low" /proc/net/arp 2>/dev/null | head -n1)
                 local a_flg=$(echo "$a_ent" | awk '{print $3}')
-                local a_dev=$(echo "$a_ent" | awk '{print $6}')
-                if [ "$a_flg" = "0x2" ] && [ "$a_dev" = "br-lan" ]; then
-                    is_online=1
-                    band="Cáp LAN 🔌 (100M)"
-                    icon="💻"
+                if [ "$a_flg" = "0x2" ] && [ -n "$ip" ]; then
+                    if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
+                        is_online=1
+                        band="Cáp LAN 🔌 (100M)"
+                        icon="💻"
+                    fi
                 fi
             fi
 
             # Kiểm tra xem có đang bị chặn không
             local block_badge=""
             if [ -f "$TIMED_BLOCKS_FILE" ]; then
-                local b_match=$(grep -i "^${mac_low}|" "$TIMED_BLOCKS_FILE" | head -n1)
+                local b_match=$(grep -i "^${mac_low}|" "$TIMED_BLOCKS_FILE" 2>/dev/null | head -n1)
                 if [ -n "$b_match" ]; then
                     block_badge=" [⛔ ĐANG BỊ CHẶN]"
                 fi
@@ -436,31 +456,30 @@ cmd_clients() {
     fi
 
     # 2. Duyệt các thiết bị Wi-Fi dùng IP tĩnh (không có trong dhcp.leases)
-    for wif_dev in phy0-ap0 phy1-ap0; do
-        local stas=$(iw dev "$wif_dev" station dump 2>/dev/null | awk '/Station/{print tolower($2)}')
-        for sm in $stas; do
-            if ! echo "$processed_macs" | grep -qi "$sm"; then
-                processed_macs="${processed_macs} ${sm}"
-                local s_ip=$(awk -v mac="$sm" 'tolower($4)==tolower(mac) {print $1}' /proc/net/arp 2>/dev/null | head -n 1)
+    if [ -f "$wifi_tmp" ]; then
+        while IFS='|' read -r sm_mac sm_ifc sm_sig sm_band sm_con; do
+            [ -z "$sm_mac" ] && continue
+            if ! echo "$processed_macs" | grep -qi "$sm_mac"; then
+                processed_macs="${processed_macs} ${sm_mac}"
+                local s_ip=$(awk -v mac="$sm_mac" 'tolower($4)==tolower(mac) {print $1}' /proc/net/arp 2>/dev/null | head -n 1)
                 [ -z "$s_ip" ] && s_ip="IP Tĩnh"
 
-                local band="Wi-Fi 5GHz ⚡"
-                [ "$wif_dev" = "phy1-ap0" ] && band="Wi-Fi 2.4GHz 📶"
-                local st=$(iw dev "$wif_dev" station get "$sm" 2>/dev/null)
-                local s=$(echo "$st" | awk '/signal:/{print $2, $3}')
+                local band_str="Wi-Fi 2.4GHz 📶"
+                [ "$sm_band" = "5GHz" ] && band_str="Wi-Fi 5GHz ⚡"
                 local sig_info=""
-                [ -n "$s" ] && sig_info=" · Sóng: <code>${s}</code>"
+                [ -n "$sm_sig" ] && [ "$sm_sig" != "N/A" ] && sig_info=" · Sóng: <code>${sm_sig}</code>"
 
                 count=$((count + 1))
-                local sm_u=$(echo "$sm" | tr '[:lower:]' '[:upper:]')
+                local sm_u=$(echo "$sm_mac" | tr '[:lower:]' '[:upper:]')
                 dev_entries="${dev_entries}${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
    ├ 📍 IP: <code>${s_ip}</code>
    ├ 🔑 MAC: <code>${sm_u}</code>
-   └ 📡 Kết nối: <code>${band}</code>${sig_info}
+   └ 📡 Kết nối: <code>${band_str}</code>${sig_info}
 "
             fi
-        done
-    done
+        done < "$wifi_tmp"
+    fi
+    rm -f "$wifi_tmp" 2>/dev/null || true
 
     local header="📱 <b>DANH SÁCH THIẾT BỊ ĐANG ONLINE (${count} máy)</b>
 ━━━━━━━━━━━━━━━━━━
@@ -558,13 +577,16 @@ cmd_traffic() {
 
 # ─── CMD_WIFI: THÔNG SỐ SÓNG & SỐ MÁY TRÊN TỪNG BĂNG TẦN ──────────────────────
 cmd_wifi() {
-    local ssid_2g=$(uci -q get wireless.default_radio1.ssid || echo "Xiaomi_2.4G")
+    local ssid_2g=$(uci -q get wireless.default_radio1.ssid || uci -q get wireless.@wifi-iface[0].ssid || echo "Xiaomi_2.4G")
     local ch_2g=$(uci -q get wireless.radio1.channel || echo "6")
-    local ssid_5g=$(uci -q get wireless.default_radio0.ssid || echo "Xiaomi_5G")
+    local ssid_5g=$(uci -q get wireless.default_radio0.ssid || uci -q get wireless.@wifi-iface[1].ssid || echo "Xiaomi_5G")
     local ch_5g=$(uci -q get wireless.radio0.channel || echo "149")
 
-    local cnt_5g=$(iw dev phy0-ap0 station dump 2>/dev/null | grep -c "Station" || echo 0)
-    local cnt_24g=$(iw dev phy1-ap0 station dump 2>/dev/null | grep -c "Station" || echo 0)
+    local wifi_tmp="/tmp/vcrt_wifi_cmd.tmp"
+    get_wifi_stations > "$wifi_tmp" 2>/dev/null
+    local cnt_5g=$(grep -c "|5GHz|" "$wifi_tmp" 2>/dev/null || echo 0)
+    local cnt_24g=$(grep -c "|2.4GHz|" "$wifi_tmp" 2>/dev/null || echo 0)
+    rm -f "$wifi_tmp" 2>/dev/null || true
 
     local msg="📶 <b>THÔNG SỐ PHÁT SÓNG WI-FI ROUTER</b>
 ━━━━━━━━━━━━━━━━━━
@@ -676,7 +698,7 @@ Ví dụ: <code>/unblock 00:11:22:33:44:55</code>"
 }
 
 cmd_help() {
-    local msg="🤖 <b>VCRT OS - TRỢ LÝ ĐIỀU HÀNH ROUTER 24/7</b>
+    local msg="🤖 <b>VCRT OS v1.0.0 - TRỢ LÝ ĐIỀU HÀNH ROUTER 24/7</b>
 ━━━━━━━━━━━━━━━━━━
 Dưới đây là các lệnh điều khiển:
 
@@ -718,7 +740,7 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-send_msg "🚀 <b>VCRT Telegram Bot đã khởi động thành công!</b>
+send_msg "🚀 <b>VCRT OS v1.0.0 - Telegram Bot đã sẵn sàng!</b>
 Hệ thống giám sát 24/7 đang hoạt động. Gõ /help hoặc chọn nút bên dưới để điều khiển."
 
 OFFSET=0

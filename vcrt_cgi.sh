@@ -796,9 +796,35 @@ if [ "$ACTION" = "clients" ]; then
         printf "%b" "$active_blocks" > "$BLOCKS_TIMED_FILE"
     fi
 
-    # B. Quét danh sách sóng Wi-Fi thực tế (5GHz và 2.4GHz)
-    wifi_dump_5g=$(iw dev phy0-ap0 station dump 2>/dev/null)
-    wifi_dump_24g=$(iw dev phy1-ap0 station dump 2>/dev/null)
+    # B. Quét toàn bộ sóng Wi-Fi thực tế phần cứng (tự động nhận diện mọi interface)
+    wifi_dump_file="/tmp/vcrt_cgi_wifi.tmp"
+    rm -f "$wifi_dump_file" 2>/dev/null || true
+    devs=$(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}')
+    [ -z "$devs" ] && devs="wlan0 wlan1 phy0-ap0 phy1-ap0 ra0 rai0"
+    for ifc in $devs; do
+        case "$ifc" in *sta*|*mon*) continue ;; esac
+        ch=$(iw dev "$ifc" info 2>/dev/null | awk '/channel/{print $2}')
+        case "$ch" in ''|*[!0-9]*) ch=6 ;; esac
+        b="2.4GHz"
+        [ "$ch" -gt 14 ] 2>/dev/null && b="5GHz"
+
+        iw dev "$ifc" station dump 2>/dev/null | awk -v iface="$ifc" -v band="$b" '
+        /^Station/ {
+            if (mac != "") {
+                print mac "|" iface "|" sig "|" band "|" con;
+            }
+            mac = tolower($2);
+            sig = "-55 dBm";
+            con = 0;
+        }
+        /signal:/ { sig = $2 " " $3; }
+        /connected time:/ { con = int($3); }
+        END {
+            if (mac != "") {
+                print mac "|" iface "|" sig "|" band "|" con;
+            }
+        }' >> "$wifi_dump_file" 2>/dev/null
+    done
 
     # C. Quét bảng ARP nhân Linux & kiểm tra cổng LAN vật lý
     arp_data=$(cat /proc/net/arp 2>/dev/null)
@@ -861,32 +887,23 @@ if [ "$ACTION" = "clients" ]; then
             con_sec=0
             con_str=""
 
-            if echo "$wifi_dump_5g" | grep -qi "$mac_low"; then
+            st_info=$(grep -i "^${mac_low}|" "$wifi_dump_file" 2>/dev/null | head -n1)
+            if [ -n "$st_info" ]; then
                 is_wifi=1
-                band="5GHz"
-                st=$(iw dev phy0-ap0 station get "$mac_low" 2>/dev/null)
-                rssi=$(echo "$st" | awk '/signal:/{print $2}')
-                con_sec=$(echo "$st" | awk '/connected time:/{print int($3)}')
-            elif echo "$wifi_dump_24g" | grep -qi "$mac_low"; then
-                is_wifi=1
-                band="2.4GHz"
-                st=$(iw dev phy1-ap0 station get "$mac_low" 2>/dev/null)
-                rssi=$(echo "$st" | awk '/signal:/{print $2}')
-                con_sec=$(echo "$st" | awk '/connected time:/{print int($3)}')
-            fi
-
-            # Kiểm tra Dây LAN thật
-            is_lan=0
-            if [ "$is_wifi" -eq 0 ] && [ "$lan_ports_up" -eq 1 ]; then
+                band=$(echo "$st_info" | cut -d'|' -f4)
+                rssi=$(echo "$st_info" | cut -d'|' -f3 | awk '{print $1}')
+                con_sec=$(echo "$st_info" | cut -d'|' -f5)
+            elif [ "$lan_ports_up" -eq 1 ] && [ -n "$ip" ]; then
                 arp_entry=$(echo "$arp_data" | grep -i "$mac_low" | head -n1)
                 arp_flag=$(echo "$arp_entry" | awk '{print $3}')
-                arp_dev=$(echo "$arp_entry" | awk '{print $6}')
-                if [ "$arp_flag" = "0x2" ] && [ "$arp_dev" = "br-lan" ]; then
-                    is_lan=1
-                    band="Dây LAN"
-                    rssi=-50
-                    con_str="Đang cắm cáp LAN"
-                    echo "$name" | grep -qi "lap\|pc\|desktop" && icon="💻"
+                if [ "$arp_flag" = "0x2" ]; then
+                    if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
+                        is_lan=1
+                        band="Dây LAN"
+                        rssi=-50
+                        con_str="Đang cắm cáp LAN"
+                        echo "$name" | grep -qi "lap\|pc\|desktop" && icon="💻"
+                    fi
                 fi
             fi
 

@@ -8,7 +8,7 @@ kwrt-*.bin
 
 # Deployment packages & binaries
 *.tar.gz
-deploy_vcrt.tar.gz
+!deploy_vcrt.tar.gz
 deploy_rowa.tar.gz
 rowa*
 nextdns
