@@ -180,7 +180,7 @@ watch_wifi_devices() {
             for m in $curr_macs; do
                 if ! echo "$last_macs" | grep -qi "$m"; then
                     sleep 1
-                    local mac_up=$(echo "$m" | tr '[:lower:]' '[:upper:]')
+                    local mac_up=$(echo "$m" | tr 'a-z' 'A-Z')
                     local ip=$(awk -v mac="$m" 'tolower($2)==tolower(mac) {print $3}' /tmp/dhcp.leases 2>/dev/null | head -n 1)
                     local name=$(awk -v mac="$m" 'tolower($2)==tolower(mac) {print $4}' /tmp/dhcp.leases 2>/dev/null | head -n 1)
                     [ -z "$ip" ] && ip=$(awk -v mac="$m" 'tolower($4)==tolower(mac) {print $1}' /proc/net/arp 2>/dev/null | head -n 1)
@@ -573,7 +573,7 @@ cmd_clients() {
             fi
 
             count=$((count + 1))
-            local mac_u=$(echo "$mac" | tr '[:lower:]' '[:upper:]')
+            local mac_u=$(echo "$mac" | tr 'a-z' 'A-Z')
             local m_ip=$(mask_ip "$ip")
             local m_mac=$(mask_mac "$mac_u")
             
@@ -624,7 +624,7 @@ ${detail_block}
                 [ -n "$sm_sig" ] && [ "$sm_sig" != "N/A" ] && sig_str="${sm_sig} (${sig_badge})"
 
                 count=$((count + 1))
-                local sm_u=$(echo "$sm_mac" | tr '[:lower:]' '[:upper:]')
+                local sm_u=$(echo "$sm_mac" | tr 'a-z' 'A-Z')
                 local m_sip=$(mask_ip "$s_ip")
                 local m_smac=$(mask_mac "$sm_u")
                 dev_entries="${dev_entries}${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
@@ -859,22 +859,38 @@ Ví dụ: <code>/unblock 00:11:22:33:44:55</code>"
 }
 
 cmd_help() {
-    local msg="🤖 <b>VCRT OS v1.0.0 - TRỢ LÝ ĐIỀU HÀNH ROUTER 24/7</b>
+    local msg="🤖 <b>VCRT OS v1.0.0 · TRỢ LÝ ĐIỀU HÀNH ROUTER 24/7</b>
 ━━━━━━━━━━━━━━━━━━
-Dưới đây là các lệnh điều khiển:
+Bấm trực tiếp vào các lệnh bên dưới để thực thi:
 
 ⚡ /status - Xem CPU, RAM, Uptime, WAN IP
 📱 /clients - Danh sách thiết bị ĐANG ONLINE thực tế
 📊 /traffic - Thống kê dung lượng mạng đã dùng
 📶 /wifi - Thông số phát sóng Wi-Fi 2.4G & 5G
-🏓 /ping - Kiểm tra độ trễ mạng Internet
+🏓 /ping - Kiểm tra độ trễ mạng Internet Cloudflare
 ⛔ /block &lt;mac&gt; [phút] - Chặn mạng có hẹn giờ
 🔓 /unblock &lt;mac&gt; - Mở mạng lại ngay lập tức
 🔄 /reboot - Khởi động lại router từ xa
-❓ /help - Hiển thị hướng dẫn này
+❓ /help - Bảng hướng dẫn sử dụng
 ━━━━━━━━━━━━━━━━━━
-<i>Bạn có thể bấm trực tiếp các nút menu ở bàn phím bên dưới!</i>"
+<i>Bạn cũng có thể gõ trực tiếp (ví dụ: status, client, wifi) hoặc bấm nút bàn phím bên dưới!</i>"
     send_msg "$msg"
+}
+
+cmd_unknown() {
+    local entered="$1"
+    local msg="⚠️ <b>Lệnh không xác định:</b> <code>${entered}</code>
+━━━━━━━━━━━━━━━━━━
+Bấm <b>/help</b> để xem bảng lệnh hoặc bấm trực tiếp các nút menu ở bàn phím bên dưới."
+    send_msg "$msg"
+}
+
+register_telegram_commands() {
+    [ -z "$BOT_TOKEN" ] && return
+    local cmd_json='{"commands":[{"command":"status","description":"⚡ Xem CPU, RAM, Uptime, WAN IP"},{"command":"clients","description":"📱 Thiết bị online, băng tần & thời gian"},{"command":"traffic","description":"📊 Thống kê dung lượng mạng đã dùng"},{"command":"wifi","description":"📶 Thông số phát sóng Wi-Fi 2.4G & 5G"},{"command":"ping","description":"🏓 Kiểm tra độ trễ mạng Internet"},{"command":"block","description":"⛔ Chặn mạng: /block <mac> [phút]"},{"command":"unblock","description":"🔓 Mở mạng: /unblock <mac>"},{"command":"reboot","description":"🔄 Khởi động lại router từ xa"},{"command":"help","description":"❓ Hướng dẫn điều khiển"}]}'
+    curl -s --max-time 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands" \
+        -H "Content-Type: application/json" \
+        -d "$cmd_json" >/dev/null 2>&1 || true
 }
 
 # ─── KHỞI CHẠY TIẾN TRÌNH ────────────────────────────────────────────────────
@@ -907,6 +923,8 @@ send_msg "🟢 <b>VCRT OS v1.0.0 - TELEGRAM BOT ĐÃ SẴN SÀNG!</b>
 📡 Quản lý phát sóng Wi-Fi 2.4GHz & 5GHz · Quét & đổi nguồn WISP
 📱 Gõ <b>/clients</b> để xem danh sách máy online, băng tần và thời gian bắt sóng."
 
+register_telegram_commands
+
 OFFSET=0
 API_URL="https://api.telegram.org/bot${BOT_TOKEN}"
 
@@ -928,25 +946,60 @@ while true; do
             OFFSET=$((UPDATE_ID + 1))
 
             if [ "$SENDER_ID" = "$CHAT_ID" ]; then
-                # Clean command name
-                cmd_name=$(echo "$CMD_TEXT" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
-                arg1=$(echo "$CMD_TEXT" | awk '{print $2}')
-                arg2=$(echo "$CMD_TEXT" | awk '{print $3}')
+                # 1. Bỏ khoảng trắng thừa và tách các từ
+                clean_line=$(echo "$CMD_TEXT" | awk '{$1=$1};1')
+                first_word=$(echo "$clean_line" | awk '{print $1}')
+                arg1=""
+                arg2=""
+                case "$first_word" in
+                    /*|[a-zA-Z0-9]*)
+                        arg1=$(echo "$clean_line" | awk '{print $2}')
+                        arg2=$(echo "$clean_line" | awk '{print $3}')
+                        ;;
+                    *)
+                        # Bỏ qua emoji nếu người dùng bấm nút menu có icon
+                        first_word=$(echo "$clean_line" | awk '{print $2}')
+                        arg1=$(echo "$clean_line" | awk '{print $3}')
+                        arg2=$(echo "$clean_line" | awk '{print $4}')
+                        ;;
+                esac
+
+                # 2. Chuẩn hóa tên lệnh: chữ thường (chuẩn BusyBox), bỏ dấu / ở đầu, bỏ đuôi @bot_name
+                cmd_name=$(echo "$first_word" | tr 'A-Z' 'a-z' | sed 's/^\///' | sed 's/@.*//')
 
                 case "$cmd_name" in
-                    /status*|/info*|/router*) cmd_status ;;
-                    /client*|/clients*|/device*|/devices*|/thietbi*|/may*) cmd_clients ;;
-                    /traffic*|/dungluong*|/data*) cmd_traffic ;;
-                    /wifi*|/song*) cmd_wifi ;;
-                    /ping*|/test*) cmd_ping ;;
-                    /block*) cmd_block "$arg1" "$arg2" ;;
-                    /unblock*) cmd_unblock "$arg1" ;;
-                    /reboot*)
+                    status*|info*|router*|trang*|*trạng*|tt)
+                        cmd_status
+                        ;;
+                    client*|device*|thiet*|*thiết*|may*|*máy*|danhsach*)
+                        cmd_clients
+                        ;;
+                    traffic*|dung*|data*|luu*|*lưu*|dl)
+                        cmd_traffic
+                        ;;
+                    wifi*|wi-fi*|song*|*sóng*|phat*|*phát*|wisp*)
+                        cmd_wifi
+                        ;;
+                    ping*|test*|latency*|do*|*độ*)
+                        cmd_ping
+                        ;;
+                    block*|chan*|*chặn*|khoa*|*khóa*)
+                        cmd_block "$arg1" "$arg2"
+                        ;;
+                    unblock*|mo*|*mở*|bokhoa*)
+                        cmd_unblock "$arg1"
+                        ;;
+                    reboot*|restart*|reset*|khoi*|*khởi*)
                         send_msg "⚠️ <b>Đang khởi động lại router trong 3 giây...</b>"
                         sleep 3
                         /sbin/reboot
                         ;;
-                    /help*|/start*|*) cmd_help ;;
+                    help*|start*|menu*|tro*|*trợ*|huong*|*hướng*|\?)
+                        cmd_help
+                        ;;
+                    *)
+                        cmd_unknown "$first_word"
+                        ;;
                 esac
             fi
         fi
