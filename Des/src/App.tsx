@@ -1,5 +1,16 @@
 import { useState, useEffect } from "react";
-import { fetchApi, postApi, checkAuthApi, logoutApi, changePasswordApi } from "./api";
+import {
+  fetchApi,
+  postApi,
+  checkAuthApi,
+  logoutApi,
+  changePasswordApi,
+  getTelegramConfigApi,
+  saveTelegramConfigApi,
+  testTelegramBotApi,
+  controlTelegramServiceApi,
+  type TelegramConfig
+} from "./api";
 import LoginScreen from "./LoginScreen";
 import NextDNSScreen from "./NextDNSScreen";
 
@@ -1920,6 +1931,33 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
     messages: []
   });
 
+  // Telegram Bot State
+  const [tgConfig, setTgConfig] = useState<TelegramConfig | null>(null);
+  const [tgToken, setTgToken] = useState("");
+  const [tgChatId, setTgChatId] = useState("");
+  const [tgNotifWifi, setTgNotifWifi] = useState(true);
+  const [tgNotifExpire, setTgNotifExpire] = useState(true);
+  const [tgNotifDaily, setTgNotifDaily] = useState(true);
+  const [tgDailyHour, setTgDailyHour] = useState(20);
+  const [tgEnabled, setTgEnabled] = useState(true);
+  const [tgLoading, setTgLoading] = useState(false);
+  const [tgTesting, setTgTesting] = useState(false);
+  const [tgMsg, setTgMsg] = useState<{ text: string; error?: boolean } | null>(null);
+  const [showTokenInput, setShowTokenInput] = useState(false);
+
+  const fetchTelegramConfig = async () => {
+    const data = await getTelegramConfigApi();
+    if (data) {
+      setTgConfig(data);
+      setTgChatId(data.chat_id || "");
+      setTgNotifWifi(data.notif_wifi ?? true);
+      setTgNotifExpire(data.notif_expire ?? true);
+      setTgNotifDaily(data.notif_daily ?? true);
+      setTgDailyHour(data.daily_hour || 20);
+      setTgEnabled(data.enabled ?? false);
+    }
+  };
+
   useEffect(() => {
     const fetchModem = async () => {
       const res = await fetchApi("modem_get");
@@ -1928,7 +1966,67 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
       }
     };
     fetchModem();
+    fetchTelegramConfig();
   }, []);
+
+  const handleSaveTelegram = async () => {
+    setTgLoading(true);
+    setTgMsg(null);
+    try {
+      const res = await saveTelegramConfigApi({
+        bot_token: tgToken || undefined,
+        chat_id: tgChatId,
+        notif_wifi: tgNotifWifi,
+        notif_expire: tgNotifExpire,
+        notif_daily: tgNotifDaily,
+        daily_hour: tgDailyHour,
+        bot_enabled: tgEnabled
+      });
+      if (res && res.status === "ok") {
+        setTgMsg({ text: "✅ Đã lưu cấu hình và đồng bộ dịch vụ Telegram Bot thành công!" });
+        setTgToken("");
+        setShowTokenInput(false);
+        await fetchTelegramConfig();
+      } else {
+        setTgMsg({ text: "❌ Lỗi lưu cấu hình Telegram Bot.", error: true });
+      }
+    } catch (e: any) {
+      setTgMsg({ text: e?.message || "Lỗi kết nối.", error: true });
+    } finally {
+      setTgLoading(false);
+    }
+  };
+
+  const handleTestTelegram = async () => {
+    setTgTesting(true);
+    setTgMsg(null);
+    try {
+      const res = await testTelegramBotApi(tgToken || undefined, tgChatId || undefined);
+      if (res && res.status === "ok") {
+        setTgMsg({ text: "✅ Tin nhắn thử nghiệm đã được gửi thành công đến Telegram của bạn!" });
+      } else {
+        setTgMsg({ text: `❌ Gửi tin thất bại: ${res?.message || "Kiểm tra lại Token và Chat ID"}`, error: true });
+      }
+    } catch (e: any) {
+      setTgMsg({ text: `❌ Lỗi gửi tin: ${e?.message}`, error: true });
+    } finally {
+      setTgTesting(false);
+    }
+  };
+
+  const handleToggleService = async (action: "start" | "stop") => {
+    setTgLoading(true);
+    setTgMsg(null);
+    try {
+      await controlTelegramServiceApi(action);
+      await fetchTelegramConfig();
+      setTgMsg({ text: action === "start" ? "✅ Đã khởi động dịch vụ Telegram Bot!" : "⏹️ Đã dừng dịch vụ Telegram Bot!" });
+    } catch (e: any) {
+      setTgMsg({ text: `Lỗi thao tác dịch vụ: ${e?.message}`, error: true });
+    } finally {
+      setTgLoading(false);
+    }
+  };
 
   const handleCleanRam = async () => {
     const res = await postApi("clean_ram");
@@ -2082,6 +2180,277 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
             )}
           </div>
         </form>
+      </div>
+
+      {/* TELEGRAM BOT THÔNG BÁO & ĐỒNG BỘ 24/7 */}
+      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 18 }}>🤖</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Telegram Bot Thông Báo 24/7</span>
+          </div>
+          <span
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              padding: "2px 8px",
+              borderRadius: 6,
+              background: tgConfig?.running ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)",
+              color: tgConfig?.running ? "#10B981" : "#EF4444",
+              border: `1px solid ${tgConfig?.running ? "rgba(16, 185, 129, 0.3)" : "rgba(239, 68, 68, 0.3)"}`,
+              display: "flex",
+              alignItems: "center",
+              gap: 4
+            }}
+          >
+            <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: "50%", background: tgConfig?.running ? "#10B981" : "#EF4444" }} />
+            {tgConfig?.running ? "ĐANG CHẠY 24/7" : "CHƯA KÍCH HOẠT"}
+          </span>
+        </div>
+
+        <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>
+          Nhận thông báo ngay lập tức về thiết bị mới, mở mạng tự động và báo cáo lưu lượng khi không truy cập web.
+        </div>
+
+        {tgMsg && (
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              marginBottom: 12,
+              background: tgMsg.error ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+              color: tgMsg.error ? "#EF4444" : "#10B981",
+              border: tgMsg.error ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(16, 185, 129, 0.3)"
+            }}
+          >
+            {tgMsg.text}
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3">
+          {/* Bot Token Input */}
+          <div>
+            <div className="flex justify-between items-center mb-1">
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Bot Token (lấy từ @BotFather)</span>
+              {tgConfig?.has_token && !showTokenInput && (
+                <button
+                  type="button"
+                  onClick={() => setShowTokenInput(true)}
+                  style={{ background: "transparent", border: "none", color: "#38BDF8", fontSize: 10, cursor: "pointer" }}
+                >
+                  Thay đổi Token
+                </button>
+              )}
+            </div>
+
+            {tgConfig?.has_token && !showTokenInput ? (
+              <div
+                className="mono flex items-center justify-between"
+                style={{
+                  width: "100%",
+                  background: "#0B0F17",
+                  border: "1px solid #1E293B",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  color: "#10B981",
+                  fontSize: 12,
+                  boxSizing: "border-box"
+                }}
+              >
+                <span>🔑 {tgConfig.token_masked}</span>
+                <span style={{ fontSize: 10, color: "#64748B" }}>Đã lưu bảo mật</span>
+              </div>
+            ) : (
+              <input
+                type="password"
+                value={tgToken}
+                onChange={(e) => setTgToken(e.target.value)}
+                placeholder="vd: 123456789:ABCdefGHIjklMNO_xyz..."
+                style={{
+                  width: "100%",
+                  background: "#0B0F17",
+                  border: "1px solid #334155",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  color: "#fff",
+                  fontSize: 12,
+                  outline: "none",
+                  boxSizing: "border-box"
+                }}
+              />
+            )}
+          </div>
+
+          {/* Admin Chat ID Input */}
+          <div>
+            <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>
+              Admin Chat ID (lấy từ @userinfobot)
+            </div>
+            <input
+              type="text"
+              value={tgChatId}
+              onChange={(e) => setTgChatId(e.target.value)}
+              placeholder="vd: 123456789"
+              style={{
+                width: "100%",
+                background: "#0B0F17",
+                border: "1px solid #334155",
+                borderRadius: 8,
+                padding: "8px 12px",
+                color: "#fff",
+                fontSize: 12,
+                outline: "none",
+                boxSizing: "border-box"
+              }}
+            />
+          </div>
+
+          {/* Alert Toggles */}
+          <div style={{ background: "#0B0F17", borderRadius: 10, padding: "10px 12px", border: "1px solid #1E293B" }} className="flex flex-col gap-2.5">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={tgNotifWifi}
+                onChange={(e) => setTgNotifWifi(e.target.checked)}
+                style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
+              />
+              <span style={{ fontSize: 12, color: "#E2E8F0" }}>
+                🔔 <strong>Báo thiết bị Wi-Fi mới</strong> (Tên, IP, MAC, 2.4G/5G)
+              </span>
+            </label>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={tgNotifExpire}
+                onChange={(e) => setTgNotifExpire(e.target.checked)}
+                style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
+              />
+              <span style={{ fontSize: 12, color: "#E2E8F0" }}>
+                ⏱️ <strong>Báo khi hết giờ chặn</strong> (Tự động mở mạng Internet)
+              </span>
+            </label>
+
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={tgNotifDaily}
+                  onChange={(e) => setTgNotifDaily(e.target.checked)}
+                  style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
+                />
+                <span style={{ fontSize: 12, color: "#E2E8F0" }}>
+                  📊 <strong>Báo cáo lưu lượng hàng ngày</strong>
+                </span>
+              </label>
+
+              {tgNotifDaily && (
+                <div className="flex items-center gap-1.5">
+                  <span style={{ fontSize: 10, color: "#94A3B8" }}>Lúc:</span>
+                  <select
+                    value={tgDailyHour}
+                    onChange={(e) => setTgDailyHour(Number(e.target.value))}
+                    style={{
+                      background: "#161F30",
+                      border: "1px solid #334155",
+                      color: "#F9FAFB",
+                      fontSize: 11,
+                      borderRadius: 6,
+                      padding: "2px 6px"
+                    }}
+                  >
+                    {[18, 19, 20, 21, 22, 23].map((h) => (
+                      <option key={h} value={h}>{h}:00</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer select-none pt-1 border-t border-[#1E293B]">
+              <input
+                type="checkbox"
+                checked={tgEnabled}
+                onChange={(e) => setTgEnabled(e.target.checked)}
+                style={{ accentColor: "#10B981", width: 15, height: 15 }}
+              />
+              <span style={{ fontSize: 12, color: "#10B981", fontWeight: 600 }}>
+                ⚡ Kích hoạt dịch vụ giám sát chạy ngầm (Procd Service)
+              </span>
+            </label>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex flex-wrap items-center gap-2 mt-1">
+            <button
+              type="button"
+              onClick={handleTestTelegram}
+              disabled={tgTesting || (!tgToken && !tgConfig?.has_token) || !tgChatId}
+              className="touch-btn flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5"
+              style={{
+                background: "rgba(56, 189, 248, 0.12)",
+                color: "#38BDF8",
+                fontSize: 12,
+                fontWeight: 600,
+                border: "1px solid rgba(56, 189, 248, 0.3)",
+                opacity: (!tgToken && !tgConfig?.has_token) || !tgChatId ? 0.5 : 1
+              }}
+            >
+              <span>✉️</span> {tgTesting ? "Đang gửi thử..." : "Gửi Tin Thử Nghiệm"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSaveTelegram}
+              disabled={tgLoading}
+              className="touch-btn flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5"
+              style={{
+                background: "#2563EB",
+                color: "#fff",
+                fontSize: 12,
+                fontWeight: 700,
+                border: "none"
+              }}
+            >
+              <span>💾</span> {tgLoading ? "Đang lưu..." : "Lưu & Khởi Động"}
+            </button>
+
+            {tgConfig?.running ? (
+              <button
+                type="button"
+                onClick={() => handleToggleService("stop")}
+                disabled={tgLoading}
+                className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
+                style={{
+                  background: "rgba(239, 68, 68, 0.15)",
+                  color: "#EF4444",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: "1px solid rgba(239, 68, 68, 0.3)"
+                }}
+              >
+                <span>⏹️</span> Dừng
+              </button>
+            ) : tgConfig?.has_token ? (
+              <button
+                type="button"
+                onClick={() => handleToggleService("start")}
+                disabled={tgLoading}
+                className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
+                style={{
+                  background: "rgba(16, 185, 129, 0.15)",
+                  color: "#10B981",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  border: "1px solid rgba(16, 185, 129, 0.3)"
+                }}
+              >
+                <span>▶️</span> Chạy
+              </button>
+            ) : null}
+          </div>
+        </div>
       </div>
 
       <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>

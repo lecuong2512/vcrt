@@ -31,6 +31,13 @@ PARAM_USER=""
 PARAM_PASS=""
 PARAM_NEW_PASS=""
 PARAM_TOKEN=""
+PARAM_BOT_TOKEN=""
+PARAM_CHAT_ID=""
+PARAM_NOTIF_WIFI=""
+PARAM_NOTIF_EXPIRE=""
+PARAM_NOTIF_DAILY=""
+PARAM_DAILY_HOUR=""
+PARAM_BOT_ENABLED=""
 
 OLD_IFS="$IFS"
 IFS='&'
@@ -58,6 +65,13 @@ for item in $QUERY_STRING; do
         pass=*) PARAM_PASS="${item#pass=}" ;;
         new_pass=*) PARAM_NEW_PASS="${item#new_pass=}" ;;
         token=*) PARAM_TOKEN="${item#token=}" ;;
+        bot_token=*) PARAM_BOT_TOKEN="${item#bot_token=}" ;;
+        chat_id=*) PARAM_CHAT_ID="${item#chat_id=}" ;;
+        notif_wifi=*) PARAM_NOTIF_WIFI="${item#notif_wifi=}" ;;
+        notif_expire=*) PARAM_NOTIF_EXPIRE="${item#notif_expire=}" ;;
+        notif_daily=*) PARAM_NOTIF_DAILY="${item#notif_daily=}" ;;
+        daily_hour=*) PARAM_DAILY_HOUR="${item#daily_hour=}" ;;
+        bot_enabled=*) PARAM_BOT_ENABLED="${item#bot_enabled=}" ;;
     esac
 done
 IFS="$OLD_IFS"
@@ -463,117 +477,221 @@ if [ "$ACTION" = "status" ] || [ -z "$ACTION" ]; then
         tot_tx=$(cat /sys/class/net/eth0/statistics/tx_bytes 2>/dev/null || echo 0)
     fi
 
-    # Persistent Daily Database: /etc/vcrt_traffic.db
-    # Format: YYYY-MM-DD|rx_bytes|tx_bytes
-    today_date=$(date +%Y-%m-%d 2>/dev/null || echo "2026-09-08")
-    today_hour=$(date +%H 2>/dev/null || echo "00")
-    now_epoch=$(date +%s 2>/dev/null || echo 0)
-    db_path="/etc/vcrt_traffic.db"
-    [ ! -f "$db_path" ] && touch "$db_path" 2>/dev/null
+    VCRT_CONF_DIR="${VCRT_CONF_DIR:-/etc/vcrt}"
+    mkdir -p "$VCRT_CONF_DIR" /tmp 2>/dev/null
+    daily_db="${VCRT_CONF_DIR}/traffic_daily.db"
+    hourly_db="${VCRT_CONF_DIR}/traffic_hourly.db"
+    prev_bytes_file="/tmp/vcrt_prev_wan_bytes.tmp"
 
-    # Midnight transition handler
-    last_date=""
-    if [ -f /tmp/vcrt_last_date.tmp ]; then
-        read -r last_date < /tmp/vcrt_last_date.tmp 2>/dev/null
-    fi
-    if [ -n "$last_date" ] && [ "$last_date" != "$today_date" ]; then
-        if [ -f /tmp/vcrt_yesterday.tmp ]; then
-            read -r y_rx y_tx < /tmp/vcrt_yesterday.tmp 2>/dev/null
-            if [ -n "$y_rx" ] && [ "$y_rx" -gt 0 ] 2>/dev/null; then
-                if ! grep -q "^${last_date}|" "$db_path" 2>/dev/null; then
-                    echo "${last_date}|${y_rx}|${y_tx}" >> "$db_path" 2>/dev/null
-                fi
-            fi
+    [ ! -f "$daily_db" ] && touch "$daily_db" 2>/dev/null
+    [ ! -f "$hourly_db" ] && touch "$hourly_db" 2>/dev/null
+
+    today_date=$(date +%Y-%m-%d 2>/dev/null || echo "2026-09-10")
+    today_hour=$(date +%H 2>/dev/null || echo "15")
+    today_year=$(date +%Y 2>/dev/null || echo "2026")
+    today_month=$(date +%m 2>/dev/null || echo "09")
+    now_epoch=$(date +%s 2>/dev/null || echo 0)
+
+    # Tính toán delta chính xác
+    delta_rx=0
+    delta_tx=0
+    if [ -f "$prev_bytes_file" ]; then
+        read -r p_rx p_tx < "$prev_bytes_file" 2>/dev/null
+        case "$p_rx" in ''|*[!0-9]*) p_rx=0 ;; esac
+        case "$p_tx" in ''|*[!0-9]*) p_tx=0 ;; esac
+        if [ "$tot_rx" -ge "$p_rx" ] 2>/dev/null; then
+            delta_rx=$(( tot_rx - p_rx ))
+            delta_tx=$(( tot_tx - p_tx ))
+        else
+            delta_rx="$tot_rx"
+            delta_tx="$tot_tx"
+        fi
+    else
+        if ! grep -q "^${today_date}|" "$daily_db" 2>/dev/null; then
+            delta_rx="$tot_rx"
+            delta_tx="$tot_tx"
         fi
     fi
-    echo "$today_date" > /tmp/vcrt_last_date.tmp 2>/dev/null
-    echo "$tot_rx $tot_tx" > /tmp/vcrt_yesterday.tmp 2>/dev/null
+    echo "$tot_rx $tot_tx" > "$prev_bytes_file" 2>/dev/null
 
-    # Build last 6 past dates for 7-day query
-    d7_dates=""
+    # Cộng dồn delta vào cơ sở dữ liệu bền vững
+    if [ "$delta_rx" -gt 0 ] 2>/dev/null || [ "$delta_tx" -gt 0 ] 2>/dev/null; then
+        if grep -q "^${today_date}|" "$daily_db" 2>/dev/null; then
+            awk -F'|' -v cur_d="$today_date" -v drx="$delta_rx" -v dtx="$delta_tx" '
+            $1 == cur_d { printf "%s|%d|%d\n", $1, $2 + drx, $3 + dtx; next; }
+            { print $0; }
+            ' "$daily_db" > "${daily_db}.tmp" 2>/dev/null && mv -f "${daily_db}.tmp" "$daily_db"
+        else
+            echo "${today_date}|${delta_rx}|${delta_tx}" >> "$daily_db" 2>/dev/null
+        fi
+
+        cur_h_key="${today_date} ${today_hour}"
+        if grep -q "^${cur_h_key}|" "$hourly_db" 2>/dev/null; then
+            awk -F'[ |]' -v cur_k="$cur_h_key" -v drx="$delta_rx" -v dtx="$delta_tx" '
+            ($1 " " $2) == cur_k { printf "%s %s|%d|%d\n", $1, $2, $3 + drx, $4 + dtx; next; }
+            { print $0; }
+            ' "$hourly_db" > "${hourly_db}.tmp" 2>/dev/null && mv -f "${hourly_db}.tmp" "$hourly_db"
+        else
+            echo "${cur_h_key}|${delta_rx}|${delta_tx}" >> "$hourly_db" 2>/dev/null
+        fi
+    fi
+
+    # Danh sách 7 ngày gần nhất (từ quá khứ đến hôm nay)
+    past_7_dates=""
     i=6
-    while [ "$i" -ge 1 ]; do
+    while [ "$i" -ge 0 ]; do
         sec_past=$(( now_epoch - i * 86400 ))
         d_cand=$(date -d "@$sec_past" +%Y-%m-%d 2>/dev/null)
-        [ -z "$d_cand" ] && d_cand="2026-09-0$(( 8 - i ))"
-        [ -n "$d7_dates" ] && d7_dates="${d7_dates},"
-        d7_dates="${d7_dates}${d_cand}"
+        [ -z "$d_cand" ] && d_cand="$today_date"
+        [ -n "$past_7_dates" ] && past_7_dates="${past_7_dates},"
+        past_7_dates="${past_7_dates}${d_cand}"
         i=$(( i - 1 ))
     done
 
-    # Uptime in seconds for time slotting
-    up_sec=$(cut -d. -f1 /proc/uptime 2>/dev/null || echo 0)
-
-    # 100% REAL TRAFFIC STATS VIA AWK
+    # ĐỘNG CƠ TÍNH TOÁN LƯU LƯỢNG ĐA CHU KỲ (100% REAL DATA AWK)
     traffic_stats_json=$(awk \
-    -v rx="$tot_rx" \
-    -v tx="$tot_tx" \
-    -v up_sec="$up_sec" \
+    -v hourly_file="$hourly_db" \
+    -v daily_file="$daily_db" \
+    -v cur_date="$today_date" \
+    -v cur_year="$today_year" \
+    -v cur_month="$today_month" \
     -v cur_hour="$today_hour" \
-    -v d7_dates="$d7_dates" \
+    -v past_7_dates="$past_7_dates" \
+    -v live_rx="$tot_rx" \
+    -v live_tx="$tot_tx" \
     'function fmt(b) {
         if (b >= 1073741824) return sprintf("%.2f GB", b/1073741824);
         if (b >= 1048576) return sprintf("%.1f MB", b/1048576);
         if (b >= 1024) return sprintf("%.1f KB", b/1024);
         return sprintf("%d B", b);
     }
-    BEGIN { FS = "|"; }
-    NF >= 3 { db_rx[$1] = $2 + 0; db_tx[$1] = $3 + 0; }
-    END {
-        mb_rx = rx / 1048576; mb_tx = tx / 1048576;
-        t_dl = fmt(rx); t_ul = fmt(tx); t_tot = fmt(rx + tx);
-        up_h = int(up_sec / 3600); if (up_h < 1) up_h = 1;
-        cur_h = int(cur_hour);
+    BEGIN {
+        FS = "[ |]";
+    }
+    FILENAME == hourly_file {
+        d = $1; h = $2 + 0;
+        if (d == cur_date) {
+            h_rx[h] = $3 + 0;
+            h_tx[h] = $4 + 0;
+        }
+        next;
+    }
+    FILENAME == daily_file {
+        d = $1;
+        split(d, dt, "-");
+        y = dt[1] + 0; m = dt[2] + 0; day = dt[3] + 0;
+        r_b = $2 + 0; t_b = $3 + 0;
+        d_rx[d] = r_b; d_tx[d] = t_b;
 
+        ym = sprintf("%04d-%02d", y, m);
+        m_rx[ym] += r_b; m_tx[ym] += t_b;
+        yr_rx[y] += r_b; yr_tx[y] += t_b;
+        next;
+    }
+    END {
+        # 1. TODAY
+        tod_rx = (cur_date in d_rx) ? d_rx[cur_date] : 0;
+        tod_tx = (cur_date in d_tx) ? d_tx[cur_date] : 0;
+        if (tod_rx == 0 && tod_tx == 0) {
+            tod_rx = live_rx + 0; tod_tx = live_tx + 0;
+        }
+        tod_dl = fmt(tod_rx); tod_ul = fmt(tod_tx); tod_tot = fmt(tod_rx + tod_tx);
+
+        cur_h = cur_hour + 0;
         p_today = "";
         for (h = 0; h <= cur_h; h++) {
             lbl = sprintf("%02dh:00", h);
             if (h == cur_h) lbl = sprintf("%02dh (Hiện tại)", h);
-            if (h >= (cur_h - up_h + 1)) {
-                pt_dl = mb_rx / up_h; pt_ul = mb_tx / up_h;
-            } else {
-                pt_dl = 0.0; pt_ul = 0.0;
-            }
+            rx_val = (h in h_rx) ? (h_rx[h] / 1048576) : 0.0;
+            tx_val = (h in h_tx) ? (h_tx[h] / 1048576) : 0.0;
             if (p_today != "") p_today = p_today ", ";
-            p_today = p_today sprintf("{\"label\":\"%s\",\"dl\":%.1f,\"ul\":%.1f}", lbl, pt_dl, pt_ul);
+            p_today = p_today sprintf("{\"label\":\"%s\",\"dl\":%.1f,\"ul\":%.1f}", lbl, rx_val, tx_val);
         }
-        if (p_today == "") p_today = sprintf("{\"label\":\"Hiện tại\",\"dl\":%.1f,\"ul\":%.1f}", mb_rx, mb_tx);
+        if (p_today == "") p_today = sprintf("{\"label\":\"Hiện tại\",\"dl\":%.1f,\"ul\":%.1f}", tod_rx/1048576, tod_tx/1048576);
 
-        p_7d = ""; tot_7d_rx = rx; tot_7d_tx = tx;
-        split(d7_dates, d_arr, ",");
-        for (i = 1; i <= 6; i++) {
-            d_key = d_arr[i];
-            r_b = (d_key in db_rx) ? db_rx[d_key] : 0;
-            t_b = (d_key in db_tx) ? db_tx[d_key] : 0;
-            tot_7d_rx += r_b; tot_7d_tx += t_b;
-            sub(/^[0-9]+-/, "", d_key);
+        # 2. 7 DAYS
+        split(past_7_dates, d7_arr, ",");
+        p_7d = ""; tot_7d_rx = 0; tot_7d_tx = 0;
+        for (i = 1; i <= 7; i++) {
+            dk = d7_arr[i];
+            rx_b = (dk in d_rx) ? d_rx[dk] : 0;
+            tx_b = (dk in d_tx) ? d_tx[dk] : 0;
+            if (dk == cur_date && rx_b == 0) { rx_b = tod_rx; tx_b = tod_tx; }
+            tot_7d_rx += rx_b; tot_7d_tx += tx_b;
+            lbl = (i == 7) ? "Hôm nay" : dk;
+            sub(/^[0-9]+-/, "", lbl);
             if (p_7d != "") p_7d = p_7d ", ";
-            p_7d = p_7d sprintf("{\"label\":\"%s\",\"dl\":%.1f,\"ul\":%.1f}", d_key, r_b / 1048576, t_b / 1048576);
+            p_7d = p_7d sprintf("{\"label\":\"%s\",\"dl\":%.1f,\"ul\":%.1f}", lbl, rx_b / 1048576, tx_b / 1048576);
         }
-        if (p_7d != "") p_7d = p_7d ", ";
-        p_7d = p_7d sprintf("{\"label\":\"Hôm nay\",\"dl\":%.1f,\"ul\":%.1f}", mb_rx, mb_tx);
         s7_dl = fmt(tot_7d_rx); s7_ul = fmt(tot_7d_tx); s7_tot = fmt(tot_7d_rx + tot_7d_tx);
 
-        p_m = sprintf("{\"label\":\"Tuần 1\",\"dl\":0.0,\"ul\":0.0}, {\"label\":\"Tuần 2 (Hiện tại)\",\"dl\":%.1f,\"ul\":%.1f}, {\"label\":\"Tuần 3\",\"dl\":0.0,\"ul\":0.0}, {\"label\":\"Tuần 4\",\"dl\":0.0,\"ul\":0.0}", mb_rx, mb_tx);
-        p_q = sprintf("{\"label\":\"Tháng 7\",\"dl\":0.0,\"ul\":0.0}, {\"label\":\"Tháng 8\",\"dl\":0.0,\"ul\":0.0}, {\"label\":\"Tháng 9 (Hiện tại)\",\"dl\":%.1f,\"ul\":%.1f}", mb_rx, mb_tx);
+        # 3. 1 MONTH (Weeks 1 to 4)
+        w_rx[1] = 0; w_rx[2] = 0; w_rx[3] = 0; w_rx[4] = 0;
+        w_tx[1] = 0; w_tx[2] = 0; w_tx[3] = 0; w_tx[4] = 0;
+        tot_m_rx = 0; tot_m_tx = 0;
+        for (dk in d_rx) {
+            split(dk, pfx, "-");
+            if ((pfx[1] + 0) == (cur_year + 0) && (pfx[2] + 0) == (cur_month + 0)) {
+                dy = pfx[3] + 0;
+                w_idx = int((dy - 1) / 7) + 1;
+                if (w_idx > 4) w_idx = 4;
+                w_rx[w_idx] += d_rx[dk];
+                w_tx[w_idx] += d_tx[dk];
+                tot_m_rx += d_rx[dk];
+                tot_m_tx += d_tx[dk];
+            }
+        }
+        if (tot_m_rx == 0) { tot_m_rx = tot_7d_rx; tot_m_tx = tot_7d_tx; }
+        sm_dl = fmt(tot_m_rx); sm_ul = fmt(tot_m_tx); sm_tot = fmt(tot_m_rx + tot_m_tx);
+        p_m = "";
+        for (w = 1; w <= 4; w++) {
+            lbl = sprintf("Tuần %d", w);
+            if (p_m != "") p_m = p_m ", ";
+            p_m = p_m sprintf("{\"label\":\"%s\",\"dl\":%.1f,\"ul\":%.1f}", lbl, w_rx[w] / 1048576, w_tx[w] / 1048576);
+        }
 
+        # 4. 1 QUARTER (3 Months)
+        q_num = int((cur_month - 1) / 3) + 1;
+        q_start_m = (q_num - 1) * 3 + 1;
+        tot_q_rx = 0; tot_q_tx = 0;
+        p_q = "";
+        for (m = q_start_m; m < q_start_m + 3; m++) {
+            ym_k = sprintf("%04d-%02d", cur_year, m);
+            q_m_r = (ym_k in m_rx) ? m_rx[ym_k] : 0;
+            q_m_t = (ym_k in m_tx) ? m_tx[ym_k] : 0;
+            tot_q_rx += q_m_r; tot_q_tx += q_m_t;
+            lbl = sprintf("Tháng %d", m);
+            if (m == cur_month) lbl = sprintf("Tháng %d (Hiện tại)", m);
+            if (p_q != "") p_q = p_q ", ";
+            p_q = p_q sprintf("{\"label\":\"%s\",\"dl\":%.1f,\"ul\":%.1f}", lbl, q_m_r / 1048576, q_m_t / 1048576);
+        }
+        if (tot_q_rx == 0) { tot_q_rx = tot_m_rx; tot_q_tx = tot_m_tx; }
+        sq_dl = fmt(tot_q_rx); sq_ul = fmt(tot_q_tx); sq_tot = fmt(tot_q_rx + tot_q_tx);
+
+        # 5. 1 YEAR (12 Months)
+        tot_y_rx = (cur_year in yr_rx) ? yr_rx[cur_year] : 0;
+        tot_y_tx = (cur_year in yr_tx) ? yr_tx[cur_year] : 0;
+        if (tot_y_rx == 0) { tot_y_rx = tot_q_rx; tot_y_tx = tot_q_tx; }
+        sy_dl = fmt(tot_y_rx); sy_ul = fmt(tot_y_tx); sy_tot = fmt(tot_y_rx + tot_y_tx);
         p_y = "";
         for (m = 1; m <= 12; m++) {
+            ym_k = sprintf("%04d-%02d", cur_year, m);
+            y_m_r = (ym_k in m_rx) ? m_rx[ym_k] : 0;
+            y_m_t = (ym_k in m_tx) ? m_tx[ym_k] : 0;
             lbl = sprintf("T%d", m);
-            dl_val = (m == 9) ? mb_rx : 0.0; ul_val = (m == 9) ? mb_tx : 0.0;
             if (p_y != "") p_y = p_y ", ";
-            p_y = p_y sprintf("{\"label\":\"%s\",\"dl\":%.1f,\"ul\":%.1f}", lbl, dl_val, ul_val);
+            p_y = p_y sprintf("{\"label\":\"%s\",\"dl\":%.1f,\"ul\":%.1f}", lbl, y_m_r / 1048576, y_m_t / 1048576);
         }
 
         printf "{\n";
-        printf "    \"today\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", t_dl, t_ul, t_tot, p_today;
-        printf "    \"days7\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", s7_dl, s7_ul, s7_tot, p_7d;
-        printf "    \"7d\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", s7_dl, s7_ul, s7_tot, p_7d;
-        printf "    \"month\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", t_dl, t_ul, t_tot, p_m;
-        printf "    \"quarter\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", t_dl, t_ul, t_tot, p_q;
-        printf "    \"year\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] }\n", t_dl, t_ul, t_tot, p_y;
-        printf "  }";
-    }' "$db_path" 2>/dev/null)
+        printf "  \"today\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", tod_dl, tod_ul, tod_tot, p_today;
+        printf "  \"days7\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", s7_dl, s7_ul, s7_tot, p_7d;
+        printf "  \"7d\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", s7_dl, s7_ul, s7_tot, p_7d;
+        printf "  \"month\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", sm_dl, sm_ul, sm_tot, p_m;
+        printf "  \"quarter\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] },\n", sq_dl, sq_ul, sq_tot, p_q;
+        printf "  \"year\": { \"dl\": \"%s\", \"ul\": \"%s\", \"total\": \"%s\", \"unit\": \"MB\", \"points\": [%s] }\n", sy_dl, sy_ul, sy_tot, p_y;
+        printf "}\n";
+    }' "$hourly_db" "$daily_db" 2>/dev/null)
 
     # Basic string formats for raw traffic object
     eval $(awk -v r="$tot_rx" -v t="$tot_tx" 'function fmt(b) {
@@ -868,6 +986,7 @@ if [ "$ACTION" = "soft_block" ] && [ -n "$MAC" ]; then
     grep -v -i "$MAC" "$BLOCKED_HARD_FILE" > "${BLOCKED_HARD_FILE}.tmp" 2>/dev/null || true
     mv "${BLOCKED_HARD_FILE}.tmp" "$BLOCKED_HARD_FILE" 2>/dev/null || true
 
+    send_telegram_event "⛔ <b>THIẾT BỊ BỊ CHẶN INTERNET!</b>\n━━━━━━━━━━━━━━━━━\n📱 <b>Tên máy:</b> <code>${PARAM_NAME:-Thiết bị}</code>\n📍 <b>IP:</b> <code>${PARAM_IP}</code>\n🔑 <b>MAC:</b> <code>${MAC}</code>\n⏱ <b>Thời hạn:</b> <code>${dur} phút</code>\n<i>Thao tác từ Web Dashboard VCRT</i>"
     printf '{"status":"ok","action":"soft_block","mac":"%s","duration":%d,"expire":%d}
 ' "$MAC" "$dur" "$expire"
     exit 0
@@ -904,6 +1023,7 @@ if [ "$ACTION" = "hard_block" ] && [ -n "$MAC" ]; then
     grep -v -i "$MAC" "$BLOCKED_SOFT_FILE" > "${BLOCKED_SOFT_FILE}.tmp" 2>/dev/null || true
     mv "${BLOCKED_SOFT_FILE}.tmp" "$BLOCKED_SOFT_FILE" 2>/dev/null || true
 
+    send_telegram_event "🛑 <b>THIẾT BỊ BỊ ĐÁ KHỎI WI-FI & CHẶN!</b>\n━━━━━━━━━━━━━━━━━\n📱 <b>Tên máy:</b> <code>${PARAM_NAME:-Thiết bị}</code>\n📍 <b>IP:</b> <code>${PARAM_IP}</code>\n🔑 <b>MAC:</b> <code>${MAC}</code>\n⏱ <b>Thời hạn:</b> <code>${dur} phút</code>\n<i>Thao tác từ Web Dashboard VCRT</i>"
     printf '{"status":"ok","action":"hard_block","mac":"%s","duration":%d,"expire":%d}
 ' "$MAC" "$dur" "$expire"
     exit 0
@@ -924,6 +1044,7 @@ if [ "$ACTION" = "unblock" ] && [ -n "$MAC" ]; then
     grep -v -i "$MAC" "$BLOCKED_HARD_FILE" > "${BLOCKED_HARD_FILE}.tmp" 2>/dev/null || true
     mv "${BLOCKED_HARD_FILE}.tmp" "$BLOCKED_HARD_FILE" 2>/dev/null || true
 
+    send_telegram_event "🔓 <b>THIẾT BỊ ĐÃ ĐƯỢC MỞ MẠNG!</b>\n━━━━━━━━━━━━━━━━━\n🔑 <b>MAC:</b> <code>${MAC}</code>\n<i>Thao tác từ Web Dashboard VCRT</i>"
     printf '{"status":"ok","action":"unblock","mac":"%s"}
 ' "$MAC"
     exit 0
@@ -1281,6 +1402,197 @@ fi
 # ==============================================================================
 # 11. CLEAN RAM & REBOOT
 # ==============================================================================
+
+# ==============================================================================
+# TELEGRAM BOT MANAGEMENT & INTEGRATION
+# ==============================================================================
+if [ "$ACTION" = "telegram_get" ]; then
+    conf_f="${VCRT_CONF_DIR}/telegram.conf"
+    b_en="0"
+    b_tok=""
+    c_id=""
+    n_wifi="1"
+    n_exp="1"
+    n_daily="1"
+    d_hour="20"
+
+    if [ -f "$conf_f" ]; then
+        while IFS='=' read -r k v; do
+            case "$k" in
+                BOT_ENABLED|bot_enabled) b_en=$(echo "$v" | tr -d ' "\r\n') ;;
+                BOT_TOKEN|bot_token) b_tok=$(echo "$v" | tr -d ' "\r\n') ;;
+                CHAT_ID|chat_id) c_id=$(echo "$v" | tr -d ' "\r\n') ;;
+                NOTIF_WIFI_JOIN|notif_wifi) n_wifi=$(echo "$v" | tr -d ' "\r\n') ;;
+                NOTIF_BLOCK_EXPIRE|notif_expire) n_exp=$(echo "$v" | tr -d ' "\r\n') ;;
+                NOTIF_DAILY_REPORT|notif_daily) n_daily=$(echo "$v" | tr -d ' "\r\n') ;;
+                DAILY_REPORT_HOUR|daily_hour) d_hour=$(echo "$v" | tr -d ' "\r\n') ;;
+            esac
+        done < "$conf_f"
+    fi
+
+    # Mask token for safe display
+    tok_masked=""
+    has_tok="false"
+    if [ -n "$b_tok" ]; then
+        has_tok="true"
+        tok_len=${#b_tok}
+        if [ "$tok_len" -gt 10 ]; then
+            pfx=$(echo "$b_tok" | cut -c 1-6)
+            sfx=$(echo "$b_tok" | awk '{print substr($0, length($0)-3, 4)}')
+            tok_masked="${pfx}****${sfx}"
+        else
+            tok_masked="******"
+        fi
+    fi
+
+    is_running="false"
+    if pgrep -f vcrt_bot.sh >/dev/null 2>&1; then
+        is_running="true"
+    fi
+
+    en_bool="false"
+    [ "$b_en" = "1" ] && en_bool="true"
+    nw_bool="false"
+    [ "$n_wifi" = "1" ] && nw_bool="true"
+    ne_bool="false"
+    [ "$n_exp" = "1" ] && ne_bool="true"
+    nd_bool="false"
+    [ "$n_daily" = "1" ] && nd_bool="true"
+
+    printf '{"status":"ok","enabled":%s,"running":%s,"has_token":%s,"token_masked":"%s","chat_id":"%s","notif_wifi":%s,"notif_expire":%s,"notif_daily":%s,"daily_hour":%d}\n' \
+        "$en_bool" "$is_running" "$has_tok" "$tok_masked" "$c_id" "$nw_bool" "$ne_bool" "$nd_bool" "${d_hour:-20}"
+    exit 0
+fi
+
+if [ "$ACTION" = "telegram_set" ]; then
+    VCRT_CONF_DIR="${VCRT_CONF_DIR:-/etc/vcrt}"
+    mkdir -p "$VCRT_CONF_DIR" 2>/dev/null
+    conf_f="${VCRT_CONF_DIR}/telegram.conf"
+
+    # Read existing if new value is empty
+    cur_tok=""
+    cur_cid=""
+    if [ -f "$conf_f" ]; then
+        cur_tok=$(awk -F= '/^(BOT_TOKEN|bot_token)/{gsub(/[ "\r\n]/,"",$2); print $2}' "$conf_f" 2>/dev/null)
+        cur_cid=$(awk -F= '/^(CHAT_ID|chat_id)/{gsub(/[ "\r\n]/,"",$2); print $2}' "$conf_f" 2>/dev/null)
+    fi
+
+    t_tok="${PARAM_BOT_TOKEN:-$cur_tok}"
+    t_cid="${PARAM_CHAT_ID:-$cur_cid}"
+    t_en="${PARAM_BOT_ENABLED:-1}"
+    t_nw="${PARAM_NOTIF_WIFI:-1}"
+    t_ne="${PARAM_NOTIF_EXPIRE:-1}"
+    t_nd="${PARAM_NOTIF_DAILY:-1}"
+    t_dh="${PARAM_DAILY_HOUR:-20}"
+
+    cat << EOF > "$conf_f"
+BOT_ENABLED=${t_en}
+BOT_TOKEN="${t_tok}"
+CHAT_ID="${t_cid}"
+NOTIF_WIFI_JOIN=${t_nw}
+NOTIF_BLOCK_EXPIRE=${t_ne}
+NOTIF_DAILY_REPORT=${t_nd}
+DAILY_REPORT_HOUR=${t_dh}
+EOF
+    chmod 600 "$conf_f" 2>/dev/null || true
+
+    # Khởi động lại dịch vụ nếu bật, dừng nếu tắt
+    if [ "$t_en" = "1" ] && [ -n "$t_tok" ] && [ -n "$t_cid" ]; then
+        if [ -x /etc/init.d/vcrt_bot ]; then
+            /etc/init.d/vcrt_bot enable >/dev/null 2>&1 || true
+            /etc/init.d/vcrt_bot restart >/dev/null 2>&1 || true
+        else
+            killall -9 vcrt_bot.sh 2>/dev/null || true
+            ( sleep 1; /usr/bin/vcrt_bot.sh >/dev/null 2>&1 & ) &
+        fi
+    else
+        if [ -x /etc/init.d/vcrt_bot ]; then
+            /etc/init.d/vcrt_bot stop >/dev/null 2>&1 || true
+            /etc/init.d/vcrt_bot disable >/dev/null 2>&1 || true
+        fi
+        killall -9 vcrt_bot.sh 2>/dev/null || true
+    fi
+
+    printf '{"status":"ok","message":"saved_telegram_config"}\n'
+    exit 0
+fi
+
+if [ "$ACTION" = "telegram_test" ]; then
+    conf_f="${VCRT_CONF_DIR}/telegram.conf"
+    tok="$PARAM_BOT_TOKEN"
+    cid="$PARAM_CHAT_ID"
+
+    if [ -z "$tok" ] && [ -f "$conf_f" ]; then
+        tok=$(awk -F= '/^(BOT_TOKEN|bot_token)/{gsub(/[ "\r\n]/,"",$2); print $2}' "$conf_f" 2>/dev/null)
+    fi
+    if [ -z "$cid" ] && [ -f "$conf_f" ]; then
+        cid=$(awk -F= '/^(CHAT_ID|chat_id)/{gsub(/[ "\r\n]/,"",$2); print $2}' "$conf_f" 2>/dev/null)
+    fi
+
+    if [ -z "$tok" ] || [ -z "$cid" ]; then
+        printf '{"status":"error","message":"missing_token_or_chat_id"}\n'
+        exit 0
+    fi
+
+    now_s=$(date +'%H:%M:%S - %d/%m/%Y' 2>/dev/null || echo "")
+    test_body="🚀 <b>VCRT OS - KIỂM TRA ĐỒNG BỘ TELEGRAM BOT THÀNH CÔNG!</b>
+━━━━━━━━━━━━━━━━━
+📡 <b>Thiết bị:</b> <code>Xiaomi MiWiFi Mini</code>
+⏰ <b>Thời gian:</b> <code>${now_s}</code>
+🔗 <b>Trạng thái:</b> <code>Kết nối thông suốt với Web Dashboard</code>
+━━━━━━━━━━━━━━━━━
+<i>Hệ thống thông báo chạy ngầm đã sẵn sàng hoạt động 24/7!</i>"
+
+    res=$(curl -s --max-time 8 -X POST "https://api.telegram.org/bot${tok}/sendMessage" \
+        -d "chat_id=${cid}" \
+        -d "parse_mode=HTML" \
+        --data-urlencode "text=${test_body}" 2>&1)
+
+    if echo "$res" | grep -q '"ok":true'; then
+        printf '{"status":"ok","message":"test_message_sent"}\n'
+    else
+        err_desc=$(echo "$res" | grep -o '"description":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+        [ -z "$err_desc" ] && err_desc="Telegram API request failed"
+        printf '{"status":"error","message":"%s"}\n' "$err_desc"
+    fi
+    exit 0
+fi
+
+if [ "$ACTION" = "telegram_service" ]; then
+    op="${TYPE:-status}"
+    case "$op" in
+        start)
+            if [ -x /etc/init.d/vcrt_bot ]; then
+                /etc/init.d/vcrt_bot start >/dev/null 2>&1 || true
+            else
+                killall -9 vcrt_bot.sh 2>/dev/null || true
+                /usr/bin/vcrt_bot.sh >/dev/null 2>&1 &
+            fi
+            ;;
+        stop)
+            if [ -x /etc/init.d/vcrt_bot ]; then
+                /etc/init.d/vcrt_bot stop >/dev/null 2>&1 || true
+            fi
+            killall -9 vcrt_bot.sh 2>/dev/null || true
+            ;;
+        restart)
+            if [ -x /etc/init.d/vcrt_bot ]; then
+                /etc/init.d/vcrt_bot restart >/dev/null 2>&1 || true
+            else
+                killall -9 vcrt_bot.sh 2>/dev/null || true
+                /usr/bin/vcrt_bot.sh >/dev/null 2>&1 &
+            fi
+            ;;
+    esac
+
+    running="false"
+    if pgrep -f vcrt_bot.sh >/dev/null 2>&1; then
+        running="true"
+    fi
+    printf '{"status":"ok","operation":"%s","running":%s}\n' "$op" "$running"
+    exit 0
+fi
+
 if [ "$ACTION" = "reset_peak_bw" ]; then
     echo "0.0 0.0" > /tmp/vcrt_peak_bw.tmp
     printf '{"status":"ok","action":"reset_peak_bw"}\n'
