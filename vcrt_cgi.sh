@@ -1,5 +1,7 @@
 #!/bin/sh
 export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+VCRT_CONF_DIR="${VCRT_CONF_DIR:-/etc/vcrt}"
+mkdir -p "$VCRT_CONF_DIR" 2>/dev/null
 # ==============================================================================
 # VCRT BACKEND CGI API (OpenWrt / Xiaomi MiWiFi Mini)
 # 100% DỮ LIỆU THẬT TỪ HỆ THỐNG ROUTER - KHÔNG DÙNG THÔNG TIN GIẢ MOCK
@@ -71,11 +73,14 @@ for item in $QUERY_STRING; do
         token=*) PARAM_TOKEN="${item#token=}" ;;
         bot_token=*) PARAM_BOT_TOKEN="${item#bot_token=}" ;;
         chat_id=*) PARAM_CHAT_ID="${item#chat_id=}" ;;
+        chat_id=*|chatid=*) PARAM_CHAT_ID="${item#*=}" ;;
         notif_wifi=*) PARAM_NOTIF_WIFI="${item#notif_wifi=}" ;;
         notif_expire=*) PARAM_NOTIF_EXPIRE="${item#notif_expire=}" ;;
         notif_daily=*) PARAM_NOTIF_DAILY="${item#notif_daily=}" ;;
         daily_hour=*) PARAM_DAILY_HOUR="${item#daily_hour=}" ;;
         bot_enabled=*) PARAM_BOT_ENABLED="${item#bot_enabled=}" ;;
+        auto_update=*) PARAM_AUTO_UPDATE="${item#auto_update=}" ;;
+        enabled=*) PARAM_ENABLED="${item#enabled=}" ;;
     esac
 done
 IFS="$OLD_IFS"
@@ -1597,6 +1602,54 @@ fi
 # ==============================================================================
 
 # ==============================================================================
+# ==============================================================================
+# VCRT OS UPDATE MANAGEMENT (GITHUB SYNC & ONE-CLICK UPGRADE)
+# ==============================================================================
+if [ "$ACTION" = "check_update" ]; then
+    cur_ver=$(cat /etc/vcrt/version 2>/dev/null || echo "1.0.0")
+    rem_ver=$(curl -s --max-time 5 "https://raw.githubusercontent.com/lecuong2512/vcrt/main/version" 2>/dev/null | tr -d ' \r\n"')
+    has_up="false"
+    valid_rem="false"
+    if [ -n "$rem_ver" ] && echo "$rem_ver" | grep -qE '^[0-9]+(\.[0-9]+)+$'; then
+        valid_rem="true"
+        if [ "$cur_ver" != "$rem_ver" ]; then
+            has_up="true"
+        fi
+    fi
+    auto_up="false"
+    if [ -f "${VCRT_CONF_DIR}/telegram.conf" ] && grep -q '^AUTO_UPDATE=1' "${VCRT_CONF_DIR}/telegram.conf" 2>/dev/null; then
+        auto_up="true"
+    fi
+    printf '{"status":"ok","current_version":"%s","remote_version":"%s","has_update":%s,"auto_update":%s}\n' \
+        "$cur_ver" "$([ "$valid_rem" = "true" ] && echo "$rem_ver" || echo "$cur_ver")" "$has_up" "$auto_up"
+    exit 0
+fi
+
+if [ "$ACTION" = "do_update" ]; then
+    (
+        curl -s -L -k -o /tmp/deploy_vcrt.tar.gz "https://raw.githubusercontent.com/lecuong2512/vcrt/main/deploy_vcrt.tar.gz" && \
+        cd /tmp && tar -xzf deploy_vcrt.tar.gz && sh install.sh
+    ) >/dev/null 2>&1 &
+    printf '{"status":"ok","message":"update_started"}\n'
+    exit 0
+fi
+
+if [ "$ACTION" = "set_auto_update" ]; then
+    val="${PARAM_ENABLED:-0}"
+    conf_f="${VCRT_CONF_DIR}/telegram.conf"
+    if [ -f "$conf_f" ]; then
+        if grep -q '^AUTO_UPDATE=' "$conf_f"; then
+            sed -i "s/^AUTO_UPDATE=.*/AUTO_UPDATE=${val}/" "$conf_f"
+        else
+            echo "AUTO_UPDATE=${val}" >> "$conf_f"
+        fi
+    fi
+    au_res="false"
+    [ "$val" = "1" ] && au_res="true"
+    printf '{"status":"ok","auto_update":%s}\n' "$au_res"
+    exit 0
+fi
+
 # TELEGRAM BOT MANAGEMENT & INTEGRATION
 # ==============================================================================
 if [ "$ACTION" = "telegram_get" ]; then
@@ -1608,13 +1661,15 @@ if [ "$ACTION" = "telegram_get" ]; then
     n_exp="1"
     n_daily="1"
     d_hour="20"
+    a_up="0"
 
     if [ -f "$conf_f" ]; then
         while IFS='=' read -r k v; do
             case "$k" in
                 BOT_ENABLED|bot_enabled) b_en=$(echo "$v" | tr -d ' "\r\n') ;;
                 BOT_TOKEN|bot_token) b_tok=$(echo "$v" | tr -d ' "\r\n') ;;
-                CHAT_ID|chat_id) c_id=$(echo "$v" | tr -d ' "\r\n') ;;
+                CHAT_ID|chat_id) c_id=$(echo "$v" | tr -d '\r\n"') ;;
+                AUTO_UPDATE|auto_update) a_up=$(echo "$v" | tr -d ' "\r\n') ;;
                 NOTIF_WIFI_JOIN|notif_wifi) n_wifi=$(echo "$v" | tr -d ' "\r\n') ;;
                 NOTIF_BLOCK_EXPIRE|notif_expire) n_exp=$(echo "$v" | tr -d ' "\r\n') ;;
                 NOTIF_DAILY_REPORT|notif_daily) n_daily=$(echo "$v" | tr -d ' "\r\n') ;;
@@ -1651,9 +1706,11 @@ if [ "$ACTION" = "telegram_get" ]; then
     [ "$n_exp" = "1" ] && ne_bool="true"
     nd_bool="false"
     [ "$n_daily" = "1" ] && nd_bool="true"
+    au_bool="false"
+    [ "$a_up" = "1" ] && au_bool="true"
 
-    printf '{"status":"ok","enabled":%s,"running":%s,"has_token":%s,"token_masked":"%s","chat_id":"%s","notif_wifi":%s,"notif_expire":%s,"notif_daily":%s,"daily_hour":%d}\n' \
-        "$en_bool" "$is_running" "$has_tok" "$tok_masked" "$c_id" "$nw_bool" "$ne_bool" "$nd_bool" "${d_hour:-20}"
+    printf '{"status":"ok","enabled":%s,"running":%s,"has_token":%s,"token_masked":"%s","chat_id":"%s","auto_update":%s,"notif_wifi":%s,"notif_expire":%s,"notif_daily":%s,"daily_hour":%d}\n' \
+        "$en_bool" "$is_running" "$has_tok" "$tok_masked" "$c_id" "$au_bool" "$nw_bool" "$ne_bool" "$nd_bool" "${d_hour:-20}"
     exit 0
 fi
 
@@ -1672,7 +1729,10 @@ if [ "$ACTION" = "telegram_set" ]; then
 
     t_tok="${PARAM_BOT_TOKEN:-$cur_tok}"
     t_cid="${PARAM_CHAT_ID:-$cur_cid}"
+    # Giải mã URL decode cho chat_id nếu có
+    t_cid=$(echo "$t_cid" | sed 's/%20/ /g; s/%2C/,/g; s/%2c/,/g; s/+/ /g')
     t_en="${PARAM_BOT_ENABLED:-1}"
+    t_au="${PARAM_AUTO_UPDATE:-0}"
     t_nw="${PARAM_NOTIF_WIFI:-1}"
     t_ne="${PARAM_NOTIF_EXPIRE:-1}"
     t_nd="${PARAM_NOTIF_DAILY:-1}"
@@ -1682,6 +1742,7 @@ if [ "$ACTION" = "telegram_set" ]; then
 BOT_ENABLED=${t_en}
 BOT_TOKEN="${t_tok}"
 CHAT_ID="${t_cid}"
+AUTO_UPDATE=${t_au}
 NOTIF_WIFI_JOIN=${t_nw}
 NOTIF_BLOCK_EXPIRE=${t_ne}
 NOTIF_DAILY_REPORT=${t_nd}
@@ -1736,17 +1797,26 @@ if [ "$ACTION" = "telegram_test" ]; then
 ━━━━━━━━━━━━━━━━━
 <i>Hệ thống thông báo chạy ngầm đã sẵn sàng hoạt động 24/7!</i>"
 
-    res=$(curl -s --max-time 8 -X POST "https://api.telegram.org/bot${tok}/sendMessage" \
-        -d "chat_id=${cid}" \
-        -d "parse_mode=HTML" \
-        --data-urlencode "text=${test_body}" 2>&1)
+    any_ok=0
+    err_last=""
+    for one_cid in $(echo "$cid" | tr ',;' ' '); do
+        [ -z "$one_cid" ] && continue
+        res=$(curl -s --max-time 8 -X POST "https://api.telegram.org/bot${tok}/sendMessage" \
+            -d "chat_id=${one_cid}" \
+            -d "parse_mode=HTML" \
+            --data-urlencode "text=${test_body}" 2>&1)
+        if echo "$res" | grep -q '"ok":true'; then
+            any_ok=1
+        else
+            err_last=$(echo "$res" | grep -o '"description":"[^"]*"' | head -n 1 | cut -d'"' -f4)
+        fi
+    done
 
-    if echo "$res" | grep -q '"ok":true'; then
+    if [ "$any_ok" -eq 1 ]; then
         printf '{"status":"ok","message":"test_message_sent"}\n'
     else
-        err_desc=$(echo "$res" | grep -o '"description":"[^"]*"' | head -n 1 | cut -d'"' -f4)
-        [ -z "$err_desc" ] && err_desc="Telegram API request failed"
-        printf '{"status":"error","message":"%s"}\n' "$err_desc"
+        [ -z "$err_last" ] && err_last="Telegram API request failed"
+        printf '{"status":"error","message":"%s"}\n' "$err_last"
     fi
     exit 0
 fi

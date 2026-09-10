@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   fetchApi,
   postApi,
@@ -9,8 +9,13 @@ import {
   saveTelegramConfigApi,
   testTelegramBotApi,
   controlTelegramServiceApi,
-  type TelegramConfig
+  checkUpdateApi,
+  doUpdateApi,
+  setAutoUpdateApi,
+  type TelegramConfig,
+  type UpdateStatus
 } from "./api";
+import { VCRTLogo } from "./VCRTLogo";
 import LoginScreen from "./LoginScreen";
 import NextDNSScreen from "./NextDNSScreen";
 
@@ -2166,6 +2171,54 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
   const [showOldPw, setShowOldPw] = useState(false);
   const [showNewPw, setShowNewPw] = useState(false);
   const [showConfirmPw, setShowConfirmPw] = useState(false);
+  const [isEditingTg, setIsEditingTg] = useState(false);
+  const [tgAutoUpdate, setTgAutoUpdate] = useState(false);
+
+  const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [updateMsg, setUpdateMsg] = useState<{ text: string; error?: boolean } | null>(null);
+
+  const handleCheckUpdate = async () => {
+    setIsCheckingUpdate(true);
+    setUpdateMsg(null);
+    try {
+      const res = await checkUpdateApi();
+      if (res && res.status === "ok") {
+        setUpdateStatus(res);
+        if (res.has_update) {
+          setUpdateMsg({ text: `🎉 Phát hiện bản cập nhật mới: v${res.remote_version}!` });
+        } else {
+          setUpdateMsg({ text: `✅ Bạn đang sử dụng phiên bản mới nhất: v${res.current_version}` });
+        }
+      } else {
+        setUpdateMsg({ text: "Không thể kiểm tra bản cập nhật lúc này.", error: true });
+      }
+    } catch (e: any) {
+      setUpdateMsg({ text: e?.message || "Lỗi kết nối kiểm tra cập nhật.", error: true });
+    } finally {
+      setIsCheckingUpdate(false);
+    }
+  };
+
+  const handleDoUpdate = async () => {
+    if (!confirm("Bắt đầu tải gói và cập nhật VCRT OS từ GitHub?\\nRouter sẽ tự khởi động lại dịch vụ sau khi hoàn thành.")) return;
+    setIsUpdating(true);
+    setUpdateMsg({ text: "🚀 Đang tiến hành tải gói cập nhật từ GitHub..." });
+    try {
+      const res = await doUpdateApi();
+      if (res && res.status === "ok") {
+        setUpdateMsg({ text: "🚀 Đã khởi chạy tiến trình cập nhật ngầm! Vui lòng đợi khoảng 10-15 giây..." });
+      } else {
+        setUpdateMsg({ text: "Lỗi khởi động cập nhật.", error: true });
+      }
+    } catch (e: any) {
+      setUpdateMsg({ text: e?.message || "Lỗi cập nhật.", error: true });
+    } finally {
+      setIsUpdating(false);
+    }
+  };
+
 
   const fetchTelegramConfig = async () => {
     const data = await getTelegramConfigApi();
@@ -2177,7 +2230,19 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
       setTgNotifDaily(data.notif_daily ?? true);
       setTgDailyHour(data.daily_hour || 20);
       setTgEnabled(data.enabled ?? false);
+      setTgAutoUpdate(data.auto_update ?? false);
+      if (!data.has_token || !data.chat_id) {
+        setIsEditingTg(true);
+      } else {
+        setIsEditingTg(false);
+      }
     }
+    // Also check update status in background
+    checkUpdateApi().then((res) => {
+      if (res && res.status === "ok") {
+        setUpdateStatus(res);
+      }
+    }).catch(() => {});
   };
 
   useEffect(() => {
@@ -2198,6 +2263,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
       const res = await saveTelegramConfigApi({
         bot_token: tgToken || undefined,
         chat_id: tgChatId,
+        auto_update: tgAutoUpdate,
         notif_wifi: tgNotifWifi,
         notif_expire: tgNotifExpire,
         notif_daily: tgNotifDaily,
@@ -2432,12 +2498,12 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
         </form>
       </div>
 
-      {/* TELEGRAM BOT THÔNG BÁO & ĐỒNG BỘ 24/7 */}
+      {/* TELEGRAM BOT THÔNG BÁO & ĐỒNG BỘ 24/7 (REDESIGNED) */}
       <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span style={{ fontSize: 18 }}>🤖</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Telegram Bot Thông Báo 24/7</span>
+            <span style={{ fontSize: 20 }}>🤖</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#F9FAFB" }}>Telegram Bot & Thông Báo 24/7</span>
           </div>
           <span
             style={{
@@ -2459,7 +2525,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
         </div>
 
         <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>
-          Nhận thông báo ngay lập tức về thiết bị mới, mở mạng tự động và báo cáo lưu lượng khi không truy cập web.
+          Giám sát thiết bị theo thời gian thực, tự động mở mạng, phát hiện máy lạ và báo cáo lưu lượng qua Telegram cá nhân hoặc Nhóm chat.
         </div>
 
         {tgMsg && (
@@ -2478,46 +2544,128 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
           </div>
         )}
 
-        <div className="flex flex-col gap-3">
-          {/* Bot Token Input */}
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Bot Token (lấy từ @BotFather)</span>
-              {tgConfig?.has_token && !showTokenInput && (
+        {/* TRẠNG THÁI ĐÃ KẾT NỐI (ẨN 2 Ô NHẬP NẾU ĐÃ CÓ CẤU HÌNH) */}
+        {tgConfig?.has_token && tgConfig?.chat_id && !isEditingTg ? (
+          <div style={{ background: "#0B0F17", borderRadius: 12, padding: 14, border: "1px solid #1E293B" }} className="flex flex-col gap-3">
+            <div className="flex items-center justify-between pb-2" style={{ borderBottom: "1px solid #1E293B" }}>
+              <div className="flex items-center gap-2">
+                <span style={{ fontSize: 16 }}>🛡️</span>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#10B981" }}>ĐÃ KẾT NỐI VÀ BẢO MẬT</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setIsEditingTg(true);
+                  setTgToken("");
+                  setTgChatId(tgConfig.chat_id);
+                }}
+                className="touch-btn py-1 px-3 rounded-lg"
+                style={{ background: "#2563EB", color: "#fff", fontSize: 11, fontWeight: 600, border: "none" }}
+              >
+                ⚙️ Cập Nhật Token & Chat ID
+              </button>
+            </div>
+
+            {/* Token Hiển Thị */}
+            <div className="flex items-center justify-between">
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Bot Token:</span>
+              <span className="mono" style={{ fontSize: 12, color: "#F8FAFC", background: "#161F30", padding: "2px 8px", borderRadius: 6 }}>
+                🔑 {tgConfig.token_masked}
+              </span>
+            </div>
+
+            {/* Chat ID / Nhóm Hiển Thị */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                  Chat ID & Nhóm nhận tin:
+                </span>
                 <button
                   type="button"
-                  onClick={() => { setShowTokenInput(true); setShowRawToken(false); }}
-                  style={{ background: "transparent", border: "none", color: "#38BDF8", fontSize: 10, cursor: "pointer" }}
+                  onClick={() => setShowRawChatId(!showRawChatId)}
+                  style={{ background: "none", border: "none", color: "#38BDF8", fontSize: 11, cursor: "pointer" }}
                 >
-                  Thay đổi Token
+                  {showRawChatId ? "🙈 Ẩn ID" : "👁 Hiện toàn bộ"}
+                </button>
+              </div>
+              <div
+                className="mono flex flex-wrap gap-1.5 p-2 rounded-lg"
+                style={{ background: "#161F30", border: "1px solid #222F46" }}
+              >
+                {tgConfig.chat_id.split(/[,\s;]+/).filter(Boolean).map((cid, idx) => {
+                  const isGroup = cid.startsWith("-");
+                  const displayCid = showRawChatId
+                    ? cid
+                    : (cid.length > 5 ? cid.slice(0, 3) + "••••" + cid.slice(-2) : "•••••");
+                  return (
+                    <span
+                      key={idx}
+                      style={{
+                        fontSize: 11,
+                        color: isGroup ? "#A78BFA" : "#38BDF8",
+                        background: isGroup ? "rgba(139, 92, 246, 0.15)" : "rgba(56, 189, 248, 0.15)",
+                        padding: "2px 8px",
+                        borderRadius: 6,
+                        border: `1px solid ${isGroup ? "rgba(139, 92, 246, 0.3)" : "rgba(56, 189, 248, 0.3)"}`
+                      }}
+                    >
+                      {isGroup ? "📢 Nhóm: " : "👤 "} {displayCid}
+                    </span>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Nút hành động nhanh */}
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={handleTestTelegram}
+                disabled={tgTesting}
+                className="touch-btn flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5"
+                style={{ background: "rgba(56, 189, 248, 0.12)", color: "#38BDF8", fontSize: 12, fontWeight: 600, border: "1px solid rgba(56, 189, 248, 0.3)" }}
+              >
+                <span>✉️</span> {tgTesting ? "Đang gửi thử..." : "Gửi Tin Thử Nghiệm"}
+              </button>
+              {tgConfig?.running ? (
+                <button
+                  type="button"
+                  onClick={() => handleToggleService("stop")}
+                  disabled={tgLoading}
+                  className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
+                  style={{ background: "rgba(239, 68, 68, 0.15)", color: "#EF4444", fontSize: 12, fontWeight: 600, border: "1px solid rgba(239, 68, 68, 0.3)" }}
+                >
+                  <span>⏹️</span> Dừng
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => handleToggleService("start")}
+                  disabled={tgLoading}
+                  className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
+                  style={{ background: "rgba(16, 185, 129, 0.15)", color: "#10B981", fontSize: 12, fontWeight: 600, border: "1px solid rgba(16, 185, 129, 0.3)" }}
+                >
+                  <span>▶️</span> Chạy 24/7
                 </button>
               )}
             </div>
-
-            {tgConfig?.has_token && !showTokenInput ? (
-              <div
-                className="mono flex items-center justify-between"
-                style={{
-                  width: "100%",
-                  background: "#0B0F17",
-                  border: "1px solid #1E293B",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                  color: "#10B981",
-                  fontSize: 12,
-                  boxSizing: "border-box"
-                }}
-              >
-                <span>🔑 {tgConfig.token_masked}</span>
-                <span style={{ fontSize: 10, color: "#64748B" }}>Đã lưu bảo mật</span>
+          </div>
+        ) : (
+          /* FORM NHẬP / CHỈNH SỬA TOKEN VÀ NHIỀU CHAT ID */
+          <div className="flex flex-col gap-3">
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span style={{ fontSize: 11, color: "#94A3B8" }}>Bot Token (lấy từ @BotFather)</span>
+                {tgConfig?.has_token && (
+                  <span className="mono" style={{ fontSize: 10, color: "#10B981" }}>Đang dùng: {tgConfig.token_masked}</span>
+                )}
               </div>
-            ) : (
               <div style={{ position: "relative" }}>
                 <input
                   type={showRawToken ? "text" : "password"}
                   value={tgToken}
                   onChange={(e) => setTgToken(e.target.value)}
-                  placeholder="vd: 123456789:ABCdefGHIjklMNO_xyz..."
+                  placeholder={tgConfig?.has_token ? "Để trống nếu không muốn đổi Token" : "vd: 7427895422:AAGcWzIvYYhx..."}
                   style={{
                     width: "100%",
                     background: "#0B0F17",
@@ -2538,113 +2686,61 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                   {showRawToken ? "🙈" : "👁"}
                 </button>
               </div>
-            )}
-          </div>
-
-          {/* Admin Chat ID Input (Ẩn bảo mật sau khi nhập) */}
-          <div>
-            <div className="flex justify-between items-center mb-1">
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Admin Chat ID (lấy từ @userinfobot)</span>
-              {tgConfig?.chat_id && !showChatIdInput && (
-                <button
-                  type="button"
-                  onClick={() => { setShowChatIdInput(true); setShowRawChatId(false); }}
-                  style={{ background: "transparent", border: "none", color: "#38BDF8", fontSize: 10, cursor: "pointer" }}
-                >
-                  Thay đổi Chat ID
-                </button>
-              )}
             </div>
 
-            {tgConfig?.chat_id && !showChatIdInput ? (
-              <div
-                className="mono flex items-center justify-between"
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <span style={{ fontSize: 11, color: "#94A3B8" }}>Chat ID hoặc ID Nhóm (hỗ trợ nhiều ID)</span>
+                <span style={{ fontSize: 10, color: "#38BDF8" }}>Phân tách bằng dấu phẩy</span>
+              </div>
+              <input
+                type="text"
+                value={tgChatId}
+                onChange={(e) => setTgChatId(e.target.value)}
+                placeholder="vd: 5746523635, -1001234567890"
                 style={{
                   width: "100%",
                   background: "#0B0F17",
-                  border: "1px solid #1E293B",
+                  border: "1px solid #334155",
                   borderRadius: 8,
                   padding: "8px 12px",
-                  color: "#38BDF8",
+                  color: "#fff",
                   fontSize: 12,
+                  outline: "none",
                   boxSizing: "border-box"
                 }}
-              >
-                <span>
-                  👤 {showRawChatId
-                    ? tgConfig.chat_id
-                    : (tgConfig.chat_id.length > 4
-                        ? tgConfig.chat_id.slice(0, 2) + "••••••" + tgConfig.chat_id.slice(-2)
-                        : "••••••••")}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowRawChatId(!showRawChatId)}
-                    style={{ background: "transparent", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 12 }}
-                  >
-                    {showRawChatId ? "🙈 Ẩn" : "👁 Hiện"}
-                  </button>
-                  <span style={{ fontSize: 10, color: "#64748B" }}>Đã lưu bảo mật</span>
-                </div>
+              />
+              <div style={{ fontSize: 10, color: "#64748B", marginTop: 4 }}>
+                💡 <i>Để gửi vào nhóm Telegram: Thêm Bot vào nhóm và nhập ID nhóm (bắt đầu bằng dấu trừ, ví dụ <code>-1002345678901</code>). Nhập nhiều ID cách nhau bằng dấu phẩy.</i>
               </div>
-            ) : (
-              <div style={{ position: "relative" }}>
+            </div>
+
+            {/* Các tùy chọn bật tắt thông báo */}
+            <div style={{ background: "#0B0F17", borderRadius: 10, padding: "10px 12px", border: "1px solid #1E293B" }} className="flex flex-col gap-2.5">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
-                  type={showRawChatId ? "text" : "password"}
-                  value={tgChatId}
-                  onChange={(e) => setTgChatId(e.target.value)}
-                  placeholder="vd: 123456789"
-                  style={{
-                    width: "100%",
-                    background: "#0B0F17",
-                    border: "1px solid #334155",
-                    borderRadius: 8,
-                    padding: "8px 38px 8px 12px",
-                    color: "#fff",
-                    fontSize: 12,
-                    outline: "none",
-                    boxSizing: "border-box"
-                  }}
+                  type="checkbox"
+                  checked={tgNotifWifi}
+                  onChange={(e) => setTgNotifWifi(e.target.checked)}
+                  style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowRawChatId(!showRawChatId)}
-                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
-                >
-                  {showRawChatId ? "🙈" : "👁"}
-                </button>
-              </div>
-            )}
-          </div>
+                <span style={{ fontSize: 12, color: "#E2E8F0" }}>
+                  🔔 <strong>Báo thiết bị Wi-Fi mới</strong> (Tên, IP, MAC, 2.4G/5G)
+                </span>
+              </label>
 
-          {/* Alert Toggles */}
-          <div style={{ background: "#0B0F17", borderRadius: 10, padding: "10px 12px", border: "1px solid #1E293B" }} className="flex flex-col gap-2.5">
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={tgNotifWifi}
-                onChange={(e) => setTgNotifWifi(e.target.checked)}
-                style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
-              />
-              <span style={{ fontSize: 12, color: "#E2E8F0" }}>
-                🔔 <strong>Báo thiết bị Wi-Fi mới</strong> (Tên, IP, MAC, 2.4G/5G)
-              </span>
-            </label>
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={tgNotifExpire}
+                  onChange={(e) => setTgNotifExpire(e.target.checked)}
+                  style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
+                />
+                <span style={{ fontSize: 12, color: "#E2E8F0" }}>
+                  ⏱ <strong>Báo hết giờ ngắt kết nối</strong> (Tự mở mạng lại)
+                </span>
+              </label>
 
-            <label className="flex items-center gap-2 cursor-pointer select-none">
-              <input
-                type="checkbox"
-                checked={tgNotifExpire}
-                onChange={(e) => setTgNotifExpire(e.target.checked)}
-                style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
-              />
-              <span style={{ fontSize: 12, color: "#E2E8F0" }}>
-                ⏱️ <strong>Báo khi hết giờ chặn</strong> (Tự động mở mạng Internet)
-              </span>
-            </label>
-
-            <div className="flex items-center justify-between">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -2653,115 +2749,173 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                   style={{ accentColor: "#3B82F6", width: 15, height: 15 }}
                 />
                 <span style={{ fontSize: 12, color: "#E2E8F0" }}>
-                  📊 <strong>Báo cáo lưu lượng hàng ngày</strong>
+                  📊 <strong>Báo cáo lưu lượng hàng ngày</strong> (Lúc {tgDailyHour}h tối)
                 </span>
               </label>
 
-              {tgNotifDaily && (
-                <div className="flex items-center gap-1.5">
-                  <span style={{ fontSize: 10, color: "#94A3B8" }}>Lúc:</span>
-                  <select
-                    value={tgDailyHour}
-                    onChange={(e) => setTgDailyHour(Number(e.target.value))}
-                    style={{
-                      background: "#161F30",
-                      border: "1px solid #334155",
-                      color: "#F9FAFB",
-                      fontSize: 11,
-                      borderRadius: 6,
-                      padding: "2px 6px"
-                    }}
-                  >
-                    {[18, 19, 20, 21, 22, 23].map((h) => (
-                      <option key={h} value={h}>{h}:00</option>
-                    ))}
-                  </select>
-                </div>
-              )}
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={tgAutoUpdate}
+                  onChange={(e) => setTgAutoUpdate(e.target.checked)}
+                  style={{ accentColor: "#10B981", width: 15, height: 15 }}
+                />
+                <span style={{ fontSize: 12, color: "#E2E8F0" }}>
+                  🚀 <strong>Tự động cập nhật VCRT OS</strong> (Khi GitHub có bản mới)
+                </span>
+              </label>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer select-none pt-1 border-t border-[#1E293B]">
-              <input
-                type="checkbox"
-                checked={tgEnabled}
-                onChange={(e) => setTgEnabled(e.target.checked)}
-                style={{ accentColor: "#10B981", width: 15, height: 15 }}
-              />
-              <span style={{ fontSize: 12, color: "#10B981", fontWeight: 600 }}>
-                ⚡ Kích hoạt dịch vụ giám sát chạy ngầm (Procd Service)
+            <div className="flex items-center gap-2 mt-1">
+              <button
+                type="button"
+                onClick={handleSaveTelegram}
+                disabled={tgLoading}
+                className="touch-btn flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5"
+                style={{ background: "#2563EB", color: "#fff", fontSize: 12, fontWeight: 700, border: "none" }}
+              >
+                <span>💾</span> {tgLoading ? "Đang lưu..." : "Lưu Cấu Hình"}
+              </button>
+              <button
+                type="button"
+                onClick={handleTestTelegram}
+                disabled={tgTesting || (!tgToken && !tgConfig?.has_token) || !tgChatId}
+                className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
+                style={{ background: "rgba(56, 189, 248, 0.12)", color: "#38BDF8", fontSize: 12, fontWeight: 600, border: "1px solid rgba(56, 189, 248, 0.3)" }}
+              >
+                <span>✉️</span> Gửi Thử
+              </button>
+              {tgConfig?.has_token && tgConfig?.chat_id && (
+                <button
+                  type="button"
+                  onClick={() => setIsEditingTg(false)}
+                  className="touch-btn py-2 px-3 rounded-xl"
+                  style={{ background: "rgba(148, 163, 184, 0.15)", color: "#94A3B8", fontSize: 12, border: "none" }}
+                >
+                  Đóng
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* KHỐI QUẢN LÝ PHIÊN BẢN & CẬP NHẬT HỆ THỐNG VCRT OS */}
+      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 20 }}>🚀</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#F9FAFB" }}>Phiên Bản & Cập Nhật Hệ Thống</span>
+          </div>
+          <span
+            className="mono"
+            style={{
+              fontSize: 11,
+              fontWeight: 700,
+              padding: "2px 8px",
+              borderRadius: 6,
+              background: "rgba(56, 189, 248, 0.15)",
+              color: "#38BDF8",
+              border: "1px solid rgba(56, 189, 248, 0.3)"
+            }}
+          >
+            v{updateStatus?.current_version || "1.0.0"}
+          </span>
+        </div>
+
+        <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>
+          Đồng bộ và nâng cấp VCRT OS một chạm trực tiếp từ máy chủ GitHub chính thức.
+        </div>
+
+        {updateMsg && (
+          <div
+            style={{
+              padding: "8px 12px",
+              borderRadius: 8,
+              fontSize: 12,
+              marginBottom: 12,
+              background: updateMsg.error ? "rgba(239, 68, 68, 0.15)" : "rgba(16, 185, 129, 0.15)",
+              color: updateMsg.error ? "#EF4444" : "#10B981",
+              border: updateMsg.error ? "1px solid rgba(239, 68, 68, 0.3)" : "1px solid rgba(16, 185, 129, 0.3)"
+            }}
+          >
+            {updateMsg.text}
+          </div>
+        )}
+
+        {/* Thông báo có bản cập nhật mới */}
+        {updateStatus?.has_update && (
+          <div
+            style={{
+              background: "linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(59, 130, 246, 0.15))",
+              border: "1px solid rgba(6, 182, 212, 0.4)",
+              borderRadius: 12,
+              padding: 14,
+              marginBottom: 12
+            }}
+          >
+            <div className="flex items-center gap-2 mb-1">
+              <span style={{ fontSize: 18 }}>🎉</span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#38BDF8" }}>
+                ĐÃ CÓ PHIÊN BẢN MỚI: v{updateStatus.remote_version}!
               </span>
-            </label>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2 mt-1">
+            </div>
+            <div style={{ fontSize: 11, color: "#CBD5E1", marginBottom: 10 }}>
+              Bản cập nhật bao gồm các tối ưu hiệu năng, bảo mật và tính năng mới nhất từ kho mã nguồn.
+            </div>
             <button
               type="button"
-              onClick={handleTestTelegram}
-              disabled={tgTesting || (!tgToken && !tgConfig?.has_token) || !tgChatId}
-              className="touch-btn flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5"
-              style={{
-                background: "rgba(56, 189, 248, 0.12)",
-                color: "#38BDF8",
-                fontSize: 12,
-                fontWeight: 600,
-                border: "1px solid rgba(56, 189, 248, 0.3)",
-                opacity: (!tgToken && !tgConfig?.has_token) || !tgChatId ? 0.5 : 1
-              }}
+              onClick={handleDoUpdate}
+              disabled={isUpdating}
+              className="touch-btn w-full py-2.5 rounded-xl flex items-center justify-center gap-2"
+              style={{ background: "linear-gradient(135deg, #06B6D4, #2563EB)", color: "#fff", fontSize: 13, fontWeight: 700, border: "none" }}
             >
-              <span>✉️</span> {tgTesting ? "Đang gửi thử..." : "Gửi Tin Thử Nghiệm"}
+              <span>⚡</span> {isUpdating ? "Đang tải và nạp bản cập nhật..." : "Cập Nhật Ngay Lập Tức"}
             </button>
+          </div>
+        )}
 
+        {/* Nút kiểm tra bản mới & Cài đặt tự động cập nhật */}
+        <div className="flex flex-col gap-2.5">
+          <div className="flex items-center gap-2">
             <button
               type="button"
-              onClick={handleSaveTelegram}
-              disabled={tgLoading}
+              onClick={handleCheckUpdate}
+              disabled={isCheckingUpdate}
               className="touch-btn flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5"
-              style={{
-                background: "#2563EB",
-                color: "#fff",
-                fontSize: 12,
-                fontWeight: 700,
-                border: "none"
-              }}
+              style={{ background: "#222F46", color: "#F9FAFB", fontSize: 12, fontWeight: 600, border: "1px solid #334155" }}
             >
-              <span>💾</span> {tgLoading ? "Đang lưu..." : "Lưu & Khởi Động"}
+              <span>🔍</span> {isCheckingUpdate ? "Đang kiểm tra..." : "Kiểm Tra Bản Mới"}
             </button>
-
-            {tgConfig?.running ? (
-              <button
-                type="button"
-                onClick={() => handleToggleService("stop")}
-                disabled={tgLoading}
-                className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
-                style={{
-                  background: "rgba(239, 68, 68, 0.15)",
-                  color: "#EF4444",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  border: "1px solid rgba(239, 68, 68, 0.3)"
-                }}
-              >
-                <span>⏹️</span> Dừng
-              </button>
-            ) : tgConfig?.has_token ? (
-              <button
-                type="button"
-                onClick={() => handleToggleService("start")}
-                disabled={tgLoading}
-                className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
-                style={{
-                  background: "rgba(16, 185, 129, 0.15)",
-                  color: "#10B981",
-                  fontSize: 12,
-                  fontWeight: 600,
-                  border: "1px solid rgba(16, 185, 129, 0.3)"
-                }}
-              >
-                <span>▶️</span> Chạy
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={() => window.open("https://github.com/lecuong2512/vcrt", "_blank")}
+              className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
+              style={{ background: "transparent", color: "#94A3B8", fontSize: 12, border: "1px solid #334155" }}
+            >
+              <span>🔗</span> GitHub
+            </button>
           </div>
+
+          <label className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer select-none" style={{ background: "#0B0F17", border: "1px solid #1E293B" }}>
+            <div className="flex flex-col">
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#E2E8F0" }}>Tự Động Cập Nhật 24/7</span>
+              <span style={{ fontSize: 10, color: "#64748B" }}>Tự động nâng cấp khi phát hiện bản mới trên GitHub</span>
+            </div>
+            <input
+              type="checkbox"
+              checked={updateStatus?.auto_update ?? false}
+              onChange={async (e) => {
+                const checked = e.target.checked;
+                const res = await setAutoUpdateApi(checked);
+                if (res && res.status === "ok") {
+                  setUpdateStatus(prev => prev ? { ...prev, auto_update: checked } : null);
+                  setUpdateMsg({ text: checked ? "✅ Đã bật chế độ tự động cập nhật 24/7!" : "ℹ️ Đã tắt tự động cập nhật." });
+                }
+              }}
+              style={{ accentColor: "#10B981", width: 18, height: 18 }}
+            />
+          </label>
         </div>
       </div>
 
@@ -2792,9 +2946,9 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
         </div>
       </div>
 
-      <div style={{ textAlign: "center", padding: "8px 0" }}>
-        <div style={{ fontSize: 11, color: "#10B981" }} className="mono">VCRT OS v1.0.0 · Core Service & Real Hardware Engine</div>
-        <div style={{ fontSize: 10, color: "#334155", marginTop: 2 }} className="mono">Xiaomi MiWiFi Mini · MediaTek MT7620A · 128MB RAM</div>
+      <div style={{ textAlign: "center", padding: "12px 0 4px 0" }} className="flex flex-col items-center gap-1.5">
+        <VCRTLogo size={32} showText={true} />
+        <div style={{ fontSize: 10, color: "#475569", marginTop: 2 }} className="mono">Xiaomi MiWiFi Mini · MediaTek MT7620A · 128MB RAM</div>
       </div>
     </div>
   );
@@ -2912,10 +3066,7 @@ export default function App() {
         }}
       >
         <div className="flex items-center gap-2">
-          <span className="pulse-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} />
-          <span style={{ fontSize: 12, fontWeight: 700, color: "#F9FAFB" }}>
-            VCRT OS <span style={{ color: "#38BDF8", fontWeight: 400 }}>· Xiaomi Mini</span>
-          </span>
+          <VCRTLogo size={28} showText={true} />
         </div>
 
         <div className="flex items-center gap-3">

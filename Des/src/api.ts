@@ -70,10 +70,19 @@ export interface TelegramConfig {
   has_token: boolean;
   token_masked: string;
   chat_id: string;
+  auto_update?: boolean;
   notif_wifi: boolean;
   notif_expire: boolean;
   notif_daily: boolean;
   daily_hour: number;
+}
+
+export interface UpdateStatus {
+  status: string;
+  current_version: string;
+  remote_version: string;
+  has_update: boolean;
+  auto_update: boolean;
 }
 
 export async function getTelegramConfigApi(): Promise<TelegramConfig | null> {
@@ -83,6 +92,7 @@ export async function getTelegramConfigApi(): Promise<TelegramConfig | null> {
 export async function saveTelegramConfigApi(params: {
   bot_token?: string;
   chat_id: string;
+  auto_update?: boolean;
   notif_wifi: boolean;
   notif_expire: boolean;
   notif_daily: boolean;
@@ -92,6 +102,7 @@ export async function saveTelegramConfigApi(params: {
   return await fetchApi("telegram_set", {
     bot_token: params.bot_token || "",
     chat_id: params.chat_id,
+    auto_update: params.auto_update ? "1" : "0",
     notif_wifi: params.notif_wifi ? "1" : "0",
     notif_expire: params.notif_expire ? "1" : "0",
     notif_daily: params.notif_daily ? "1" : "0",
@@ -110,3 +121,16 @@ export async function testTelegramBotApi(bot_token?: string, chat_id?: string) {
 export async function controlTelegramServiceApi(type: "start" | "stop" | "restart") {
   return await fetchApi("telegram_service", { type });
 }
+
+export async function checkUpdateApi(): Promise<UpdateStatus | null> {
+  return await fetchApi("check_update");
+}
+
+export async function doUpdateApi(): Promise<{ status: string; message?: string } | null> {
+  return await fetchApi("do_update");
+}
+
+export async function setAutoUpdateApi(enabled: boolean): Promise<{ status: string; auto_update: boolean } | null> {
+  return await fetchApi("set_auto_update", { enabled: enabled ? "1" : "0" });
+}
+

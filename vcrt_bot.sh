@@ -20,12 +20,13 @@ mkdir -p "$VCRT_CONF_DIR" /tmp 2>/dev/null
 KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traffic"},{"text":"/wifi"}],[{"text":"/ping"},{"text":"/help"}]],"resize_keyboard":true,"is_persistent":true}'
 
 # ─── BẢO VỆ DỮ LIỆU NHẠY CẢM VỚI TELEGRAM SPOILER (<tg-spoiler>) ──────────────
-# Khi hiển thị IP và MAC, làm mờ 1 phần bất kỳ. Bấm vào phần mờ sẽ hiển thị đầy đủ!
+# Khi hiển thị IP và MAC, làm mờ 1 phần. Bấm vào phần mờ nào chỉ hiện phần đó!
+# Chuẩn Telegram: Thẻ <tg-spoiler> KHÔNG ĐƯỢC lồng bên trong <code>!
 mask_ip() {
     local ip="$1"
     echo "$ip" | awk -F. '
     NF==4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ {
-        printf "<code>%s.%s.%s.<tg-spoiler>%s</tg-spoiler></code>\n", $1, $2, $3, $4;
+        printf "<code>%s.%s.%s.</code><tg-spoiler>%s</tg-spoiler>\n", $1, $2, $3, $4;
         exit;
     }
     { printf "<code>%s</code>\n", $0; }'
@@ -35,7 +36,7 @@ mask_wan_ip() {
     local ip="$1"
     echo "$ip" | awk -F. '
     NF==4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ {
-        printf "<code>%s.%s.<tg-spoiler>%s.%s</tg-spoiler></code>\n", $1, $2, $3, $4;
+        printf "<code>%s.%s.</code><tg-spoiler>%s.%s</tg-spoiler>\n", $1, $2, $3, $4;
         exit;
     }
     { printf "<code>%s</code>\n", $0; }'
@@ -47,7 +48,7 @@ mask_mac() {
         m = toupper($1);
         if (m ~ /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/) {
             split(m, a, ":");
-            printf "<code>%s:%s:%s:<tg-spoiler>%s:%s:%s</tg-spoiler></code>\n", a[1], a[2], a[3], a[4], a[5], a[6];
+            printf "<code>%s:%s:%s:</code><tg-spoiler>%s:%s:%s</tg-spoiler>\n", a[1], a[2], a[3], a[4], a[5], a[6];
             exit;
         }
         printf "<code>%s</code>\n", m;
@@ -58,6 +59,7 @@ load_config() {
     BOT_ENABLED=0
     BOT_TOKEN=""
     CHAT_ID=""
+    AUTO_UPDATE=0
     NOTIF_WIFI_JOIN=1
     NOTIF_BLOCK_EXPIRE=1
     NOTIF_DAILY_REPORT=1
@@ -68,20 +70,18 @@ load_config() {
         if [ -f /usr/bin/telegram_bot.sh ]; then
             local old_tok=$(grep -E 'TOKEN=' /usr/bin/telegram_bot.sh 2>/dev/null | head -n1 | cut -d= -f2- | tr -d ' "\r\n;' | sed -e 's/.*:-//' -e 's/}//')
             local old_cid=$(grep -E '(ADMIN_ID|CHAT_ID)=' /usr/bin/telegram_bot.sh 2>/dev/null | head -n1 | cut -d= -f2- | tr -d ' "\r\n;' | sed -e 's/.*:-//' -e 's/}//')
-            if [ -n "$old_tok" ] && [ "$old_tok" != "YOUR_TELEGRAM_BOT_TOKEN_HERE" ]; then
-                mkdir -p "$VCRT_CONF_DIR"
+            if [ -n "$old_tok" ] && [ -n "$old_cid" ]; then
                 cat << EOF > "$CONF_FILE"
 BOT_ENABLED=1
 BOT_TOKEN="${old_tok}"
 CHAT_ID="${old_cid}"
+AUTO_UPDATE=0
 NOTIF_WIFI_JOIN=1
 NOTIF_BLOCK_EXPIRE=1
 NOTIF_DAILY_REPORT=1
 DAILY_REPORT_HOUR=20
 EOF
-                killall -9 telegram_bot.sh 2>/dev/null || true
-                rm -f /usr/bin/telegram_bot.sh 2>/dev/null || true
-                sed -i '/telegram_bot\.sh/d' /etc/rc.local 2>/dev/null || true
+                chmod 600 "$CONF_FILE" 2>/dev/null || true
             fi
         fi
     fi
@@ -91,7 +91,8 @@ EOF
             case "$key" in
                 BOT_ENABLED|bot_enabled) BOT_ENABLED=$(echo "$val" | tr -d ' \r\n"') ;;
                 BOT_TOKEN|bot_token) BOT_TOKEN=$(echo "$val" | tr -d ' \r\n"') ;;
-                CHAT_ID|chat_id) CHAT_ID=$(echo "$val" | tr -d ' \r\n"') ;;
+                CHAT_ID|chat_id) CHAT_ID=$(echo "$val" | tr -d '\r\n"') ;; # Giữ nguyên dấu phẩy & khoảng trắng cho nhiều ID
+                AUTO_UPDATE|auto_update) AUTO_UPDATE=$(echo "$val" | tr -d ' \r\n"') ;;
                 NOTIF_WIFI_JOIN|notif_wifi) NOTIF_WIFI_JOIN=$(echo "$val" | tr -d ' \r\n"') ;;
                 NOTIF_BLOCK_EXPIRE|notif_expire) NOTIF_BLOCK_EXPIRE=$(echo "$val" | tr -d ' \r\n"') ;;
                 NOTIF_DAILY_REPORT|notif_daily) NOTIF_DAILY_REPORT=$(echo "$val" | tr -d ' \r\n"') ;;
@@ -103,13 +104,29 @@ EOF
 
 send_msg() {
     local text="$1"
-    [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ] && return 1
+    local target_chat="$2"
+    [ -z "$BOT_TOKEN" ] && return 1
     local api_url="https://api.telegram.org/bot${BOT_TOKEN}/sendMessage"
-    curl -s --max-time 10 -X POST "$api_url" \
-        -d "chat_id=${CHAT_ID}" \
-        -d "parse_mode=HTML" \
-        -d "reply_markup=${KEYBOARD}" \
-        --data-urlencode "text=${text}" >/dev/null 2>&1 || true
+
+    # Nếu có chỉ định chat_id cụ thể (phản hồi lệnh), gửi về đúng chat/nhóm đó
+    if [ -n "$target_chat" ]; then
+        curl -s --max-time 10 -X POST "$api_url" \
+            -d "chat_id=${target_chat}" \
+            -d "parse_mode=HTML" \
+            -d "reply_markup=${KEYBOARD}" \
+            --data-urlencode "text=${text}" >/dev/null 2>&1 || true
+        return 0
+    fi
+
+    # Nếu gửi thông báo chung (chạy ngầm), phát tới TẤT CẢ Chat ID / Nhóm được cấp quyền
+    for cid in $(echo "$CHAT_ID" | tr ',;' ' '); do
+        [ -z "$cid" ] && continue
+        curl -s --max-time 10 -X POST "$api_url" \
+            -d "chat_id=${cid}" \
+            -d "parse_mode=HTML" \
+            -d "reply_markup=${KEYBOARD}" \
+            --data-urlencode "text=${text}" >/dev/null 2>&1 || true
+    done
 }
 
 # ─── HELPER: QUÉT TOÀN BỘ SÓNG WI-FI PHẦN CỨNG THỜI GIAN THỰC ─────────────────
@@ -447,7 +464,8 @@ cmd_status() {
     local ch_2g=$(uci -q get wireless.radio1.channel || echo "6")
     local ch_5g=$(uci -q get wireless.radio0.channel || echo "149")
 
-    local msg="⚡ <b>VCRT OS v1.0.0 · BẢNG ĐIỀU KHIỂN ROUTER</b>
+    local target_chat="$1"
+    local msg="⬡ <b>VCRT OS · CYBER ROUTER SYSTEM</b> ⬡
 ━━━━━━━━━━━━━━━━━━
 🏷 <b>Thiết bị:</b> <code>Xiaomi MiWiFi Mini (MT7620A)</code>
 ⏱ <b>Thời gian chạy:</b> <code>${up_str}</code>
@@ -458,18 +476,20 @@ cmd_status() {
 📶 <b>Wi-Fi Kênh:</b> <code>2.4G (CH ${ch_2g}) · 5G (CH ${ch_5g})</code>
 👥 <b>Thiết bị ĐANG ONLINE:</b> <code>${online_total} máy</code>
 ━━━━━━━━━━━━━━━━━━
-<i>Gõ /clients để xem chi tiết danh sách máy online</i>"
-    send_msg "$msg"
+<i>Gõ /clients để xem danh sách máy (chạm từng máy để xem IP/MAC)</i>"
+    send_msg "$msg" "$target_chat"
 }
 
 # ─── CMD_CLIENTS: 100% ONLINE THỰC TẾ (LỌC BỎ HOÀN TOÀN MÁY ĐÃ NGẮT KẾT NỐI) ──
 cmd_clients() {
+    local target_chat="$1"
     local wifi_tmp="/tmp/vcrt_wifi_cmd_clients.tmp"
     get_wifi_stations > "$wifi_tmp" 2>/dev/null
 
-    local dev_entries=""
     local count=0
     local processed_macs=""
+    local cards_file="/tmp/vcrt_client_cards.tmp"
+    : > "$cards_file"
 
     # 1. Duyệt từ bảng DHCP Leases
     if [ -f /tmp/dhcp.leases ] && [ -s /tmp/dhcp.leases ]; then
@@ -500,60 +520,47 @@ cmd_clients() {
                 local w_con=$(echo "$w_match" | cut -d'|' -f5)
                 local w_tx=$(echo "$w_match" | cut -d'|' -f6)
 
-                if [ "$w_band" = "5GHz" ]; then
-                    conn_type="Wi-Fi 5GHz ⚡ (Tốc độ cao)"
-                else
-                    conn_type="Wi-Fi 2.4GHz 📶 (Xuyên tường)"
-                fi
+                conn_type="Wi-Fi 2.4GHz 📶 (Xuyên tường)"
+                [ "$w_band" = "5GHz" ] && conn_type="Wi-Fi 5GHz ⚡ (Tốc độ cao)"
 
-                # Định dạng thời gian bắt sóng
                 case "$w_con" in ''|*[!0-9]*) w_con=0 ;; esac
-                if [ "$w_con" -gt 86400 ]; then
-                    local d=$((w_con / 86400))
-                    local h=$(( (w_con % 86400) / 3600 ))
-                    time_str="${d} ngày ${h} giờ"
-                elif [ "$w_con" -gt 3600 ]; then
-                    local h=$((w_con / 3600))
-                    local m=$(( (w_con % 3600) / 60 ))
-                    time_str="${h} giờ ${m} phút"
+                time_str="Đang bắt sóng"
+                if [ "$w_con" -gt 3600 ]; then
+                    time_str="$((w_con / 3600)) giờ $(( (w_con % 3600) / 60 )) phút"
                 elif [ "$w_con" -gt 60 ]; then
-                    local m=$((w_con / 60))
-                    local s=$((w_con % 60))
-                    time_str="${m} phút ${s} giây"
+                    time_str="$((w_con / 60)) phút $((w_con % 60)) giây"
                 elif [ "$w_con" -gt 0 ]; then
-                    time_str="${w_con} giây (Vừa kết nối)"
-                else
-                    time_str="Đang bắt sóng"
+                    time_str="${w_con} giây"
                 fi
 
-                # Đánh giá tín hiệu sóng
                 local sig_num=$(echo "$w_sig" | awk '{print int($1)}')
                 local sig_badge="🟢 Tốt"
-                if [ "$sig_num" -ge -50 ] 2>/dev/null; then sig_badge="🟢 Rất mạnh"
-                elif [ "$sig_num" -le -75 ] 2>/dev/null; then sig_badge="🔴 Yếu"
-                elif [ "$sig_num" -le -65 ] 2>/dev/null; then sig_badge="🟡 Khá"
-                fi
+                [ "$sig_num" -ge -50 ] 2>/dev/null && sig_badge="🟢 Rất mạnh"
+                [ "$sig_num" -le -75 ] 2>/dev/null && sig_badge="🔴 Yếu"
                 [ -n "$w_sig" ] && [ "$w_sig" != "N/A" ] && sig_str="${w_sig} (${sig_badge})"
+                [ -n "$w_tx" ] && [ "$w_tx" != "N/A" ] && speed_str="${w_tx}"
+            fi
 
-                [ -n "$w_tx" ] && [ "$w_tx" != "N/A" ] && speed_str="${w_tx} (TX Bitrate)"
-            else
-                # B. Kiểm tra Cáp LAN cắm dây (Xác thực qua switch port, ping hoặc Linux neighbor table)
-                local a_ent=$(grep -i "$mac_low" /proc/net/arp 2>/dev/null | head -n1)
-                local a_flg=$(echo "$a_ent" | awk '{print $3}')
-                if [ "$a_flg" = "0x2" ] && [ -n "$ip" ]; then
-                    local is_alive=0
-                    if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
-                        is_alive=1
-                    elif ip neigh show dev br-lan 2>/dev/null | grep -i "$mac_low" | grep -v "fe80" | grep -qE "REACHABLE|DELAY|PROBE|STALE"; then
-                        is_alive=1
-                    fi
+            # B. Nếu không phải Wi-Fi -> Kiểm tra kết nối Cáp LAN thực tế
+            if [ "$is_online" -eq 0 ]; then
+                local a_match=$(awk -v mac="$mac_low" 'tolower($4)==mac {print $0}' /proc/net/arp 2>/dev/null | head -n1)
+                if [ -n "$a_match" ]; then
+                    local a_flg=$(echo "$a_match" | awk '{print $3}')
+                    if [ "$a_flg" = "0x2" ] && [ -n "$ip" ]; then
+                        local is_alive=0
+                        if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
+                            is_alive=1
+                        elif ip neigh show dev br-lan 2>/dev/null | grep -i "$mac_low" | grep -v "fe80" | grep -qE "REACHABLE|DELAY|PROBE|STALE"; then
+                            is_alive=1
+                        fi
 
-                    if [ "$is_alive" -eq 1 ]; then
-                        is_online=1
-                        conn_type="Cáp Mạng LAN 🔌 (Cổng Switch)"
-                        time_str="Đang trực tuyến (Dây cáp LAN)"
-                        speed_str="100 Mbps Full-Duplex"
-                        icon="💻"
+                        if [ "$is_alive" -eq 1 ]; then
+                            is_online=1
+                            conn_type="Cáp Mạng LAN 🔌 (Cổng Switch)"
+                            time_str="Đang trực tuyến (Dây cáp LAN)"
+                            speed_str="100 Mbps Full-Duplex"
+                            icon="💻"
+                        fi
                     fi
                 fi
             fi
@@ -588,9 +595,7 @@ cmd_clients() {
             [ -z "$speed_str" ] && detail_block="${detail_block}
    └ ⚡ Trạng thái: <code>Sẵn sàng truyền dữ liệu</code>"
 
-            dev_entries="${dev_entries}${count}. ${icon} <b>${name}</b>${block_badge}
-${detail_block}
-"
+            printf "%d. %s <b>%s</b>%s\n%s\n---ENDCARD---\n" "$count" "$icon" "$name" "$block_badge" "$detail_block" >> "$cards_file"
         done < /tmp/dhcp.leases
     fi
 
@@ -627,34 +632,45 @@ ${detail_block}
                 local sm_u=$(echo "$sm_mac" | tr 'a-z' 'A-Z')
                 local m_sip=$(mask_ip "$s_ip")
                 local m_smac=$(mask_mac "$sm_u")
-                dev_entries="${dev_entries}${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
+                local card_static="${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
    ├ 📍 IP: ${m_sip}
    ├ 🔑 MAC: ${m_smac}
    ├ 📡 Kết nối: <code>${conn_type}</code>
    ├ ⏱ Bắt sóng: <code>${time_str}</code>
    ├ 📶 Tín hiệu: <code>${sig_str:-N/A}</code>
-   └ ⚡ Tốc độ: <code>${sm_tx:-N/A}</code>
-"
+   └ ⚡ Tốc độ: <code>${sm_tx:-N/A}</code>"
+                printf "%s\n---ENDCARD---\n" "$card_static" >> "$cards_file"
             fi
         done < "$wifi_tmp"
     fi
     rm -f "$wifi_tmp" 2>/dev/null || true
 
-    local header="📱 <b>DANH SÁCH THIẾT BỊ ĐANG ONLINE (${count} máy)</b>
-━━━━━━━━━━━━━━━━━━
-"
     if [ "$count" -eq 0 ]; then
-        dev_entries="<i>Hiện không có thiết bị nào đang kết nối sóng Wi-Fi hoặc cắm dây LAN.</i>
-"
+        send_msg "📱 <b>DANH SÁCH THIẾT BỊ ĐANG ONLINE (0 máy)</b>
+━━━━━━━━━━━━━━━━━━
+<i>Hiện không có thiết bị nào đang kết nối sóng Wi-Fi hoặc cắm dây LAN.</i>" "$target_chat"
+        rm -f "$cards_file" 2>/dev/null || true
+        return 0
     fi
 
-    local footer="━━━━━━━━━━━━━━━━━━
-<i>Gõ /block &lt;mac&gt; [phút] để ngắt kết nối máy bất kỳ</i>"
-    send_msg "${header}${dev_entries}${footer}"
+    # Gửi Header thông báo tổng thể trước
+    send_msg "📱 <b>DANH SÁCH THIẾT BỊ ĐANG ONLINE (${count} máy)</b>
+━━━━━━━━━━━━━━━━━━
+💡 <i>Chạm vào phần làm mờ của máy nào thì chỉ duy nhất máy đó hiện IP/MAC:</i>" "$target_chat"
+
+    # Gửi từng thẻ thiết bị độc lập (đảm bảo Telegram không tự ý mở hết các spoiler khác)
+    if [ -f "$cards_file" ]; then
+        awk -v RS='---ENDCARD---\n' 'NF {print $0}' "$cards_file" | while IFS= read -r card_entry; do
+            [ -n "$card_entry" ] && send_msg "$card_entry" "$target_chat"
+            sleep 0.1
+        done
+        rm -f "$cards_file" 2>/dev/null || true
+    fi
 }
 
 # ─── CMD_TRAFFIC: BÁO CÁO ĐA CHU KỲ (NGÀY / 7 NGÀY / THÁNG / NĂM) ────────────
 cmd_traffic() {
+    local target_chat="$1"
     local today_date=$(date +%Y-%m-%d 2>/dev/null || echo "2026-09-10")
     local cur_year=$(date +%Y 2>/dev/null || echo "2026")
     local cur_month=$(date +%m 2>/dev/null || echo "09")
@@ -731,11 +747,12 @@ cmd_traffic() {
    └ 📥 Tải về: <code>$(echo "$yr_line" | cut -d'|' -f1)</code> · 📤 Tải lên: <code>$(echo "$yr_line" | cut -d'|' -f2)</code>
 ━━━━━━━━━━━━━━━━━━
 <i>Dữ liệu đồng bộ 100% với Web Dashboard VCRT</i>"
-    send_msg "$msg"
+    send_msg "$msg" "$target_chat"
 }
 
 # ─── CMD_WIFI: THÔNG SỐ SÓNG & SỐ MÁY TRÊN TỪNG BĂNG TẦN ──────────────────────
 cmd_wifi() {
+    local target_chat="$1"
     local ssid_2g=$(uci -q get wireless.default_radio1.ssid || uci -q get wireless.@wifi-iface[0].ssid || echo "Xiaomi_2.4G")
     local ch_2g=$(uci -q get wireless.radio1.channel || echo "6")
     local ssid_5g=$(uci -q get wireless.default_radio0.ssid || uci -q get wireless.@wifi-iface[1].ssid || echo "Xiaomi_5G")
@@ -760,12 +777,14 @@ cmd_wifi() {
    └ 👥 Đang kết nối: <code>${cnt_24g} thiết bị</code>
 ━━━━━━━━━━━━━━━━━━
 <i>Gõ /clients để xem tên các máy đang kết nối</i>"
-    send_msg "$msg"
+    send_msg "$msg" "$target_chat"
 }
 
 # ─── CMD_PING: KIỂM TRA ĐỘ TRỄ INTERNET ───────────────────────────────────────
 cmd_ping() {
-    send_msg "🏓 <i>Đang đo độ trễ mạng đến Cloudflare DNS...</i>"
+    local target_chat="$1"
+# measuring "$target_chat"
+# measuring
     local p_out=$(ping -c 3 -W 2 1.1.1.1 2>/dev/null)
     local rtt=$(echo "$p_out" | awk -F'/' '/round-trip|rtt/{print $4, $5, $6}')
     local loss=$(echo "$p_out" | grep -o '[0-9]*% packet loss' | head -n1)
@@ -788,9 +807,9 @@ cmd_ping() {
 📦 <b>Tình trạng mất gói:</b> <code>${loss:-0% packet loss}</code>
 📶 <b>Chất lượng đường truyền:</b> ${qual}
 ━━━━━━━━━━━━━━━━━━"
-        send_msg "$msg"
+        send_msg "$msg" "$target_chat"
     else
-        send_msg "❌ <b>Mất kết nối Internet!</b> Không thể gửi gói tin ping đến máy chủ bên ngoài."
+        send_msg "❌ <b>Mất kết nối Internet!</b> Không thể gửi gói tin ping đến máy chủ bên ngoài." "$target_chat"
     fi
 }
 
@@ -798,12 +817,13 @@ cmd_ping() {
 cmd_block() {
     local target_mac="$1"
     local dur="$2"
+    local target_chat="$3"
     [ -z "$dur" ] && dur=30
 
     if [ -z "$target_mac" ]; then
         send_msg "⚠️ <b>Cú pháp lệnh chưa đúng!</b>
 Vui lòng nhập: <code>/block &lt;Địa_chỉ_MAC&gt; [Số_phút]</code>
-Ví dụ: <code>/block 00:11:22:33:44:55 60</code>"
+Ví dụ: <code>/block 00:11:22:33:44:55 60</code>" "$target_chat"
         return
     fi
 
@@ -826,16 +846,17 @@ Ví dụ: <code>/block 00:11:22:33:44:55 60</code>"
 ⏱ <b>Thời hạn chặn:</b> <code>${dur} phút</code>
 ━━━━━━━━━━━━━━━━━━
 <i>Hệ thống sẽ tự động mở lại mạng khi hết giờ hoặc gõ /unblock ${target_mac}</i>"
-    send_msg "$msg"
+    send_msg "$msg" "$target_chat"
 }
 
 # ─── CMD_UNBLOCK: MỞ MẠNG QUA TELEGRAM ────────────────────────────────────────
 cmd_unblock() {
     local target_mac="$1"
+    local target_chat="$2"
     if [ -z "$target_mac" ]; then
         send_msg "⚠️ <b>Cú pháp lệnh chưa đúng!</b>
 Vui lòng nhập: <code>/unblock &lt;Địa_chỉ_MAC&gt;</code>
-Ví dụ: <code>/unblock 00:11:22:33:44:55</code>"
+Ví dụ: <code>/unblock 00:11:22:33:44:55</code>" "$target_chat"
         return
     fi
 
@@ -855,10 +876,61 @@ Ví dụ: <code>/unblock 00:11:22:33:44:55</code>"
 🔑 <b>MAC:</b> ${m_tmac}
 ━━━━━━━━━━━━━━━━━━
 <i>Thiết bị đã có thể truy cập mạng bình thường.</i>"
-    send_msg "$msg"
+    send_msg "$msg" "$target_chat"
+}
+
+cmd_update() {
+    local sub_arg="$1"
+    local target_chat="$2"
+    local cur_ver=$(cat /etc/vcrt/version 2>/dev/null || echo "1.0.0")
+
+    if [ "$sub_arg" = "now" ] || [ "$sub_arg" = "install" ] || [ "$sub_arg" = "yes" ]; then
+        send_msg "🚀 <b>ĐANG CẬP NHẬT VCRT OS TỪ GITHUB...</b>
+━━━━━━━━━━━━━━━━━━
+<i>Hệ thống đang tải gói deploy_vcrt.tar.gz và tự động cài đặt. Dịch vụ sẽ tự khởi động lại sau giây lát...</i>" "$target_chat"
+        (
+            curl -s -L -k -o /tmp/deploy_vcrt.tar.gz "https://raw.githubusercontent.com/lecuong2512/vcrt/main/deploy_vcrt.tar.gz" &&             cd /tmp && tar -xzf deploy_vcrt.tar.gz && sh install.sh
+        ) >/dev/null 2>&1 &
+        return 0
+    fi
+
+    local remote_ver=$(curl -s --max-time 5 "https://raw.githubusercontent.com/lecuong2512/vcrt/main/version" 2>/dev/null | tr -d ' \r\n"')
+    if [ -z "$remote_ver" ] || ! echo "$remote_ver" | grep -qE '^[0-9]+(\.[0-9]+)+$'; then
+        send_msg "⚠️ <b>Không thể kiểm tra phiên bản mới trên GitHub!</b>
+━━━━━━━━━━━━━━━━━━
+<i>Phiên bản hiện tại của router: <code>v${cur_ver}</code>
+Vui lòng kiểm tra lại kết nối Internet hoặc thử lại sau.</i>" "$target_chat"
+        return 1
+    fi
+
+    if [ "$cur_ver" = "$remote_ver" ]; then
+        send_msg "✅ <b>Hệ thống đang chạy phiên bản mới nhất!</b>
+━━━━━━━━━━━━━━━━━━
+🏷 <b>Phiên bản VCRT OS:</b> <code>v${cur_ver}</code>
+🛡 Tất cả tính năng và bản vá bảo mật đã được cập nhật đầy đủ." "$target_chat"
+    else
+        send_msg "🚀 <b>PHÁT HIỆN BẢN CẬP NHẬT MỚI: v${remote_ver}</b>
+━━━━━━━━━━━━━━━━━━
+🏷 <b>Phiên bản hiện tại:</b> <code>v${cur_ver}</code>
+✨ <b>Phiên bản mới nhất:</b> <code>v${remote_ver}</code>
+━━━━━━━━━━━━━━━━━━
+Gõ hoặc bấm <code>/update now</code> để tự động nâng cấp ngay lập tức!" "$target_chat"
+    fi
+}
+
+cmd_logo() {
+    local target_chat="$1"
+    local msg="⬡ <b>VCRT OS · CYBER ROUTER SYSTEM</b> ⬡
+━━━━━━━━━━━━━━━━━━
+🛡 <b>Hệ Điều Hành Router Thông Minh Đa Nhiệm</b>
+⚡ Kiến trúc Micro-Daemon hiệu năng cao trên OpenWrt
+🎨 Giao diện Cyberpunk Dark Neon thời gian thực
+🤖 Trợ lý điều hành tự động hóa Telegram 24/7"
+    send_msg "$msg" "$target_chat"
 }
 
 cmd_help() {
+    local target_chat="$1"
     local msg="🤖 <b>VCRT OS v1.0.0 · TRỢ LÝ ĐIỀU HÀNH ROUTER 24/7</b>
 ━━━━━━━━━━━━━━━━━━
 Bấm trực tiếp vào các lệnh bên dưới để thực thi:
@@ -870,24 +942,27 @@ Bấm trực tiếp vào các lệnh bên dưới để thực thi:
 🏓 /ping - Kiểm tra độ trễ mạng Internet Cloudflare
 ⛔ /block &lt;mac&gt; [phút] - Chặn mạng có hẹn giờ
 🔓 /unblock &lt;mac&gt; - Mở mạng lại ngay lập tức
+🔄 /update - Kiểm tra & nâng cấp hệ điều hành
+⬡ /logo - Biểu tượng & thông tin hệ thống
 🔄 /reboot - Khởi động lại router từ xa
 ❓ /help - Bảng hướng dẫn sử dụng
 ━━━━━━━━━━━━━━━━━━
 <i>Bạn cũng có thể gõ trực tiếp (ví dụ: status, client, wifi) hoặc bấm nút bàn phím bên dưới!</i>"
-    send_msg "$msg"
+    send_msg "$msg" "$target_chat"
 }
 
 cmd_unknown() {
     local entered="$1"
+    local target_chat="$2"
     local msg="⚠️ <b>Lệnh không xác định:</b> <code>${entered}</code>
 ━━━━━━━━━━━━━━━━━━
 Bấm <b>/help</b> để xem bảng lệnh hoặc bấm trực tiếp các nút menu ở bàn phím bên dưới."
-    send_msg "$msg"
+    send_msg "$msg" "$target_chat"
 }
 
 register_telegram_commands() {
     [ -z "$BOT_TOKEN" ] && return
-    local cmd_json='{"commands":[{"command":"status","description":"⚡ Xem CPU, RAM, Uptime, WAN IP"},{"command":"clients","description":"📱 Thiết bị online, băng tần & thời gian"},{"command":"traffic","description":"📊 Thống kê dung lượng mạng đã dùng"},{"command":"wifi","description":"📶 Thông số phát sóng Wi-Fi 2.4G & 5G"},{"command":"ping","description":"🏓 Kiểm tra độ trễ mạng Internet"},{"command":"block","description":"⛔ Chặn mạng: /block <mac> [phút]"},{"command":"unblock","description":"🔓 Mở mạng: /unblock <mac>"},{"command":"reboot","description":"🔄 Khởi động lại router từ xa"},{"command":"help","description":"❓ Hướng dẫn điều khiển"}]}'
+    local cmd_json='{"commands":[{"command":"status","description":"⚡ Xem CPU, RAM, Uptime, WAN IP"},{"command":"clients","description":"📱 Thiết bị online, băng tần & thời gian"},{"command":"traffic","description":"📊 Thống kê dung lượng mạng đã dùng"},{"command":"wifi","description":"📶 Thông số phát sóng Wi-Fi 2.4G & 5G"},{"command":"ping","description":"🏓 Kiểm tra độ trễ mạng Internet"},{"command":"update","description":"🚀 Kiểm tra & cập nhật VCRT OS"},{"command":"block","description":"⛔ Chặn mạng: /block <mac> [phút]"},{"command":"unblock","description":"🔓 Mở mạng: /unblock <mac>"},{"command":"reboot","description":"🔄 Khởi động lại router từ xa"},{"command":"help","description":"❓ Hướng dẫn điều khiển"}]}'
     curl -s --max-time 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands" \
         -H "Content-Type: application/json" \
         -d "$cmd_json" >/dev/null 2>&1 || true
@@ -904,15 +979,45 @@ if [ "$BOT_ENABLED" != "1" ] || [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
     exit 0
 fi
 
+watch_system_updates() {
+    # Kiểm tra bản cập nhật mới định kỳ (mỗi 6 tiếng một lần)
+    while true; do
+        sleep 21600
+        load_config
+        local cur_ver=$(cat /etc/vcrt/version 2>/dev/null || echo "1.0.0")
+        local remote_ver=$(curl -s --max-time 5 "https://raw.githubusercontent.com/lecuong2512/vcrt/main/version" 2>/dev/null | tr -d ' \r\n"')
+        if [ -n "$remote_ver" ] && [ "$cur_ver" != "$remote_ver" ]; then
+            if [ "$AUTO_UPDATE" = "1" ]; then
+                send_msg "🚀 <b>TỰ ĐỘNG CẬP NHẬT VCRT OS: v${remote_ver}</b>
+━━━━━━━━━━━━━━━━━━
+⚙️ Đang tải và cài đặt bản cập nhật mới nhất theo cài đặt của bạn..."
+                (
+                    curl -s -L -k -o /tmp/deploy_vcrt.tar.gz "https://raw.githubusercontent.com/lecuong2512/vcrt/main/deploy_vcrt.tar.gz" && \
+                    cd /tmp && tar -xzf deploy_vcrt.tar.gz && sh install.sh
+                ) >/dev/null 2>&1 &
+            else
+                send_msg "🔔 <b>THÔNG BÁO BẢN CẬP NHẬT MỚI: v${remote_ver}</b>
+━━━━━━━━━━━━━━━━━━
+🏷 Phiên bản hiện tại: <code>v${cur_ver}</code>
+✨ Phiên bản mới: <code>v${remote_ver}</code>
+━━━━━━━━━━━━━━━━━━
+Gõ hoặc bấm <code>/update now</code> để cập nhật ngay lập tức!"
+            fi
+        fi
+    done
+}
+
 watch_wifi_devices &
 PID_WIFI=$!
 watch_block_timers &
 PID_BLOCK=$!
 record_traffic_periodically &
 PID_TRAFFIC=$!
+watch_system_updates &
+PID_UPDATE=$!
 
 cleanup() {
-    kill -9 $PID_WIFI $PID_BLOCK $PID_TRAFFIC 2>/dev/null || true
+    kill -9 $PID_WIFI $PID_BLOCK $PID_TRAFFIC $PID_UPDATE 2>/dev/null || true
     exit 0
 }
 trap cleanup INT TERM EXIT
@@ -945,7 +1050,16 @@ while true; do
         if [ -n "$UPDATE_ID" ]; then
             OFFSET=$((UPDATE_ID + 1))
 
-            if [ "$SENDER_ID" = "$CHAT_ID" ]; then
+            # Phân quyền: Kiểm tra SENDER_ID có trong danh sách CHAT_ID không (hỗ trợ cả nhóm âm)
+            is_authorized=0
+            for allowed_id in $(echo "$CHAT_ID" | tr ',;' ' '); do
+                if [ "$SENDER_ID" = "$allowed_id" ]; then
+                    is_authorized=1
+                    break
+                fi
+            done
+
+            if [ "$is_authorized" -eq 1 ]; then
                 # 1. Bỏ khoảng trắng thừa và tách các từ
                 clean_line=$(echo "$CMD_TEXT" | awk '{$1=$1};1')
                 first_word=$(echo "$clean_line" | awk '{print $1}')
@@ -969,36 +1083,42 @@ while true; do
 
                 case "$cmd_name" in
                     status*|info*|router*|trang*|*trạng*|tt)
-                        cmd_status
+                        cmd_status "$SENDER_ID"
                         ;;
                     client*|device*|thiet*|*thiết*|may*|*máy*|danhsach*)
-                        cmd_clients
+                        cmd_clients "$SENDER_ID"
                         ;;
                     traffic*|dung*|data*|luu*|*lưu*|dl)
-                        cmd_traffic
+                        cmd_traffic "$SENDER_ID"
                         ;;
                     wifi*|wi-fi*|song*|*sóng*|phat*|*phát*|wisp*)
-                        cmd_wifi
+                        cmd_wifi "$SENDER_ID"
                         ;;
                     ping*|test*|latency*|do*|*độ*)
-                        cmd_ping
+                        cmd_ping "$SENDER_ID"
+                        ;;
+                    update*|capnhat*|*cập*nhật*)
+                        cmd_update "$arg1" "$SENDER_ID"
+                        ;;
+                    logo*|bieutuong*)
+                        cmd_logo "$SENDER_ID"
                         ;;
                     block*|chan*|*chặn*|khoa*|*khóa*)
-                        cmd_block "$arg1" "$arg2"
+                        cmd_block "$arg1" "$arg2" "$SENDER_ID"
                         ;;
                     unblock*|mo*|*mở*|bokhoa*)
-                        cmd_unblock "$arg1"
+                        cmd_unblock "$arg1" "$SENDER_ID"
                         ;;
                     reboot*|restart*|reset*|khoi*|*khởi*)
-                        send_msg "⚠️ <b>Đang khởi động lại router trong 3 giây...</b>"
+                        send_msg "⚠️ <b>Đang khởi động lại router trong 3 giây...</b>" "$SENDER_ID"
                         sleep 3
                         /sbin/reboot
                         ;;
                     help*|start*|menu*|tro*|*trợ*|huong*|*hướng*|\?)
-                        cmd_help
+                        cmd_help "$SENDER_ID"
                         ;;
                     *)
-                        cmd_unknown "$first_word"
+                        cmd_unknown "$first_word" "$SENDER_ID"
                         ;;
                 esac
             fi

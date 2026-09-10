@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { loginApi } from "./api";
+import { VCRTLogo } from "./VCRTLogo";
 
 interface LoginScreenProps {
   onLoginSuccess: (user: string, token: string) => void;
@@ -88,22 +89,8 @@ export default function LoginScreen({ onLoginSuccess }: LoginScreenProps) {
       >
         {/* Top Logo & Title */}
         <div style={{ textAlign: "center", marginBottom: "24px" }}>
-          <div
-            style={{
-              width: "60px",
-              height: "60px",
-              borderRadius: "16px",
-              background: "linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(16, 185, 129, 0.2) 100%)",
-              border: "1px solid rgba(56, 189, 248, 0.3)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "28px",
-              margin: "0 auto 14px auto",
-              boxShadow: "0 0 20px rgba(56, 189, 248, 0.2)"
-            }}
-          >
-            🛡️
+          <div className="flex justify-center mb-3">
+            <VCRTLogo size={68} showText={false} />
           </div>
           <div style={{ fontSize: "20px", fontWeight: "800", color: "#F9FAFB", letterSpacing: "-0.02em" }}>
             VCRT CONTROL CENTER
