@@ -28,6 +28,29 @@ load_config() {
     NOTIF_DAILY_REPORT=1
     DAILY_REPORT_HOUR=20
 
+    # Tự động di chuyển cấu hình Token cũ từ /usr/bin/telegram_bot.sh nếu có
+    if [ ! -f "$CONF_FILE" ] || ! grep -q 'BOT_TOKEN="[0-9]' "$CONF_FILE" 2>/dev/null; then
+        if [ -f /usr/bin/telegram_bot.sh ]; then
+            local old_tok=$(grep -E 'TOKEN=' /usr/bin/telegram_bot.sh 2>/dev/null | head -n1 | cut -d= -f2- | tr -d ' "\r\n;' | sed -e 's/.*:-//' -e 's/}//')
+            local old_cid=$(grep -E '(ADMIN_ID|CHAT_ID)=' /usr/bin/telegram_bot.sh 2>/dev/null | head -n1 | cut -d= -f2- | tr -d ' "\r\n;' | sed -e 's/.*:-//' -e 's/}//')
+            if [ -n "$old_tok" ] && [ "$old_tok" != "YOUR_TELEGRAM_BOT_TOKEN_HERE" ]; then
+                mkdir -p "$VCRT_CONF_DIR"
+                cat << EOF > "$CONF_FILE"
+BOT_ENABLED=1
+BOT_TOKEN="${old_tok}"
+CHAT_ID="${old_cid}"
+NOTIF_WIFI_JOIN=1
+NOTIF_BLOCK_EXPIRE=1
+NOTIF_DAILY_REPORT=1
+DAILY_REPORT_HOUR=20
+EOF
+                killall -9 telegram_bot.sh 2>/dev/null || true
+                rm -f /usr/bin/telegram_bot.sh 2>/dev/null || true
+                sed -i '/telegram_bot\.sh/d' /etc/rc.local 2>/dev/null || true
+            fi
+        fi
+    fi
+
     if [ -f "$CONF_FILE" ]; then
         while IFS='=' read -r key val; do
             case "$key" in
@@ -68,17 +91,19 @@ get_wifi_stations() {
         iw dev "$ifc" station dump 2>/dev/null | awk -v iface="$ifc" -v band="$b" '
         /^Station/ {
             if (mac != "") {
-                print mac "|" iface "|" sig "|" band "|" con;
+                print mac "|" iface "|" sig "|" band "|" con "|" bitrate;
             }
             mac = tolower($2);
             sig = "N/A";
             con = 0;
+            bitrate = "N/A";
         }
-        /signal:/ { sig = $2 " " $3; }
+        /signal:/ { sig = $2 " dBm"; }
         /connected time:/ { con = int($3); }
+        /tx bitrate:/ { bitrate = $3 " " $4; }
         END {
             if (mac != "") {
-                print mac "|" iface "|" sig "|" band "|" con;
+                print mac "|" iface "|" sig "|" band "|" con "|" bitrate;
             }
         }'
     done
@@ -398,26 +423,62 @@ cmd_clients() {
             [ "$name" = "*" ] || [ -z "$name" ] && name="Thiết bị không tên"
 
             local is_online=0
-            local band=""
-            local sig_info=""
+            local conn_type=""
+            local sig_str=""
+            local time_str=""
+            local speed_str=""
             local icon="📱"
             echo "$name" | grep -qi "lap\|pc\|mac\|win\|desktop" && icon="💻"
-            echo "$name" | grep -qi "tv\|tivi\|sony\|lg\|samsung\|tcl" && icon="📺"
+            echo "$name" | grep -qi "tv\|tivi\|sony\|lg\|samsung\|tcl\|panasonic" && icon="📺"
             echo "$name" | grep -qi "cam\|ipcam\|imou\|ezviz" && icon="📷"
             echo "$name" | grep -qi "pad\|tab" && icon="📟"
 
-            # A. Kiểm tra sóng Wi-Fi (phần cứng xác thực)
+            # A. Kiểm tra sóng Wi-Fi (phần cứng xác thực 100%)
             local w_match=$(grep -i "^${mac_low}|" "$wifi_tmp" 2>/dev/null | head -n1)
             if [ -n "$w_match" ]; then
                 is_online=1
-                local w_band=$(echo "$w_match" | cut -d'|' -f4)
+                local w_ifc=$(echo "$w_match" | cut -d'|' -f2)
                 local w_sig=$(echo "$w_match" | cut -d'|' -f3)
+                local w_band=$(echo "$w_match" | cut -d'|' -f4)
+                local w_con=$(echo "$w_match" | cut -d'|' -f5)
+                local w_tx=$(echo "$w_match" | cut -d'|' -f6)
+
                 if [ "$w_band" = "5GHz" ]; then
-                    band="5GHz ⚡"
+                    conn_type="Wi-Fi 5GHz ⚡ (Tốc độ cao)"
                 else
-                    band="2.4GHz 📶"
+                    conn_type="Wi-Fi 2.4GHz 📶 (Xuyên tường)"
                 fi
-                [ -n "$w_sig" ] && [ "$w_sig" != "N/A" ] && sig_info=" · Sóng: <code>${w_sig}</code>"
+
+                # Định dạng thời gian bắt sóng
+                case "$w_con" in ''|*[!0-9]*) w_con=0 ;; esac
+                if [ "$w_con" -gt 86400 ]; then
+                    local d=$((w_con / 86400))
+                    local h=$(( (w_con % 86400) / 3600 ))
+                    time_str="${d} ngày ${h} giờ"
+                elif [ "$w_con" -gt 3600 ]; then
+                    local h=$((w_con / 3600))
+                    local m=$(( (w_con % 3600) / 60 ))
+                    time_str="${h} giờ ${m} phút"
+                elif [ "$w_con" -gt 60 ]; then
+                    local m=$((w_con / 60))
+                    local s=$((w_con % 60))
+                    time_str="${m} phút ${s} giây"
+                elif [ "$w_con" -gt 0 ]; then
+                    time_str="${w_con} giây (Vừa kết nối)"
+                else
+                    time_str="Đang bắt sóng"
+                fi
+
+                # Đánh giá tín hiệu sóng
+                local sig_num=$(echo "$w_sig" | awk '{print int($1)}')
+                local sig_badge="🟢 Tốt"
+                if [ "$sig_num" -ge -50 ] 2>/dev/null; then sig_badge="🟢 Rất mạnh"
+                elif [ "$sig_num" -le -75 ] 2>/dev/null; then sig_badge="🔴 Yếu"
+                elif [ "$sig_num" -le -65 ] 2>/dev/null; then sig_badge="🟡 Khá"
+                fi
+                [ -n "$w_sig" ] && [ "$w_sig" != "N/A" ] && sig_str="${w_sig} (${sig_badge})"
+
+                [ -n "$w_tx" ] && [ "$w_tx" != "N/A" ] && speed_str="${w_tx} (TX Bitrate)"
             else
                 # B. Kiểm tra Cáp LAN cắm dây (Chỉ chấp nhận nếu phản hồi Ping)
                 local a_ent=$(grep -i "$mac_low" /proc/net/arp 2>/dev/null | head -n1)
@@ -425,7 +486,9 @@ cmd_clients() {
                 if [ "$a_flg" = "0x2" ] && [ -n "$ip" ]; then
                     if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
                         is_online=1
-                        band="Cáp LAN 🔌 (100M)"
+                        conn_type="Cáp Mạng LAN 🔌 (Cổng Switch)"
+                        time_str="Đang trực tuyến (Phản hồi Ping)"
+                        speed_str="100 Mbps Full-Duplex"
                         icon="💻"
                     fi
                 fi
@@ -447,34 +510,62 @@ cmd_clients() {
 
             count=$((count + 1))
             local mac_u=$(echo "$mac" | tr '[:lower:]' '[:upper:]')
-            dev_entries="${dev_entries}${count}. ${icon} <b>${name}</b>${block_badge}
-   ├ 📍 IP: <code>${ip}</code>
+            
+            local detail_block="   ├ 📍 IP: <code>${ip}</code>
    ├ 🔑 MAC: <code>${mac_u}</code>
-   └ 📡 Kết nối: <code>${band}</code>${sig_info}
+   ├ 📡 Kết nối: <code>${conn_type}</code>
+   ├ ⏱ Thời gian: <code>${time_str}</code>"
+            [ -n "$sig_str" ] && detail_block="${detail_block}
+   ├ 📶 Tín hiệu: <code>${sig_str}</code>"
+            [ -n "$speed_str" ] && detail_block="${detail_block}
+   └ ⚡ Tốc độ: <code>${speed_str}</code>"
+            [ -z "$speed_str" ] && detail_block="${detail_block}
+   └ ⚡ Trạng thái: <code>Sẵn sàng truyền dữ liệu</code>"
+
+            dev_entries="${dev_entries}${count}. ${icon} <b>${name}</b>${block_badge}
+${detail_block}
 "
         done < /tmp/dhcp.leases
     fi
 
     # 2. Duyệt các thiết bị Wi-Fi dùng IP tĩnh (không có trong dhcp.leases)
     if [ -f "$wifi_tmp" ]; then
-        while IFS='|' read -r sm_mac sm_ifc sm_sig sm_band sm_con; do
+        while IFS='|' read -r sm_mac sm_ifc sm_sig sm_band sm_con sm_tx; do
             [ -z "$sm_mac" ] && continue
             if ! echo "$processed_macs" | grep -qi "$sm_mac"; then
                 processed_macs="${processed_macs} ${sm_mac}"
                 local s_ip=$(awk -v mac="$sm_mac" 'tolower($4)==tolower(mac) {print $1}' /proc/net/arp 2>/dev/null | head -n 1)
                 [ -z "$s_ip" ] && s_ip="IP Tĩnh"
 
-                local band_str="Wi-Fi 2.4GHz 📶"
-                [ "$sm_band" = "5GHz" ] && band_str="Wi-Fi 5GHz ⚡"
-                local sig_info=""
-                [ -n "$sm_sig" ] && [ "$sm_sig" != "N/A" ] && sig_info=" · Sóng: <code>${sm_sig}</code>"
+                local conn_type="Wi-Fi 2.4GHz 📶 (Xuyên tường)"
+                [ "$sm_band" = "5GHz" ] && conn_type="Wi-Fi 5GHz ⚡ (Tốc độ cao)"
+
+                case "$sm_con" in ''|*[!0-9]*) sm_con=0 ;; esac
+                local time_str="Đang bắt sóng"
+                if [ "$sm_con" -gt 3600 ]; then
+                    time_str="$((sm_con / 3600)) giờ $(( (sm_con % 3600) / 60 )) phút"
+                elif [ "$sm_con" -gt 60 ]; then
+                    time_str="$((sm_con / 60)) phút $((sm_con % 60)) giây"
+                elif [ "$sm_con" -gt 0 ]; then
+                    time_str="${sm_con} giây"
+                fi
+
+                local sig_str=""
+                local sig_num=$(echo "$sm_sig" | awk '{print int($1)}')
+                local sig_badge="🟢 Tốt"
+                [ "$sig_num" -ge -50 ] 2>/dev/null && sig_badge="🟢 Rất mạnh"
+                [ "$sig_num" -le -75 ] 2>/dev/null && sig_badge="🔴 Yếu"
+                [ -n "$sm_sig" ] && [ "$sm_sig" != "N/A" ] && sig_str="${sm_sig} (${sig_badge})"
 
                 count=$((count + 1))
                 local sm_u=$(echo "$sm_mac" | tr '[:lower:]' '[:upper:]')
                 dev_entries="${dev_entries}${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
    ├ 📍 IP: <code>${s_ip}</code>
    ├ 🔑 MAC: <code>${sm_u}</code>
-   └ 📡 Kết nối: <code>${band_str}</code>${sig_info}
+   ├ 📡 Kết nối: <code>${conn_type}</code>
+   ├ ⏱ Thời gian: <code>${time_str}</code>
+   ├ 📶 Tín hiệu: <code>${sig_str:-N/A}</code>
+   └ ⚡ Tốc độ: <code>${sm_tx:-N/A}</code>
 "
             fi
         done < "$wifi_tmp"
@@ -740,8 +831,10 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-send_msg "🚀 <b>VCRT OS v1.0.0 - Telegram Bot đã sẵn sàng!</b>
-Hệ thống giám sát 24/7 đang hoạt động. Gõ /help hoặc chọn nút bên dưới để điều khiển."
+send_msg "🚀 <b>VCRT OS v1.0.0 - Telegram Bot đã sẵn sàng nhận lệnh!</b>
+━━━━━━━━━━━━━━━━━━
+⏱ Hệ thống giám sát thiết bị & lưu lượng 24/7 đang hoạt động.
+📱 Gõ /clients hoặc bấm menu bên dưới để kiểm tra ngay."
 
 OFFSET=0
 API_URL="https://api.telegram.org/bot${BOT_TOKEN}"

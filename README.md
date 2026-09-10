@@ -60,7 +60,7 @@
 Chạy lệnh sau trên terminal SSH của router:
 
 ```sh
-curl -L -k -o /tmp/deploy_vcrt.tar.gz "https://github.com/lecuong2512/vcrt/raw/main/deploy_vcrt.tar.gz" && cd /tmp && tar -xzf deploy_vcrt.tar.gz && mkdir -p /etc/vcrt /www/cgi-bin /www/vcrt && [ ! -f /etc/vcrt/telegram.conf ] && cp -f telegram.conf.example /etc/vcrt/telegram.conf || true; cp -f vcrt /www/cgi-bin/vcrt && chmod +x /www/cgi-bin/vcrt && cp -f vcrt_bot.sh /usr/bin/vcrt_bot.sh && chmod +x /usr/bin/vcrt_bot.sh && cp -f vcrt_bot /etc/init.d/vcrt_bot && chmod +x /etc/init.d/vcrt_bot && /etc/init.d/vcrt_bot enable && killall -9 vcrt_bot.sh 2>/dev/null || true; /etc/init.d/vcrt_bot restart && rm -rf /www/vcrt/* && cp -rf www/vcrt/* /www/vcrt/ && rm -rf vcrt vcrt_bot* www telegram.conf.example deploy_vcrt.tar.gz && echo "=== VCRT OS DEPLOY SUCCESS ==="
+curl -L -k -o /tmp/deploy_vcrt.tar.gz "https://github.com/lecuong2512/vcrt/raw/main/deploy_vcrt.tar.gz" && cd /tmp && tar -xzf deploy_vcrt.tar.gz && sh install.sh
 ```
 
 Sau khi cài đặt thành công, truy cập:
