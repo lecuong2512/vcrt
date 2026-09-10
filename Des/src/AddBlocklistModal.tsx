@@ -123,8 +123,8 @@ export default function AddBlocklistModal({
           width: "100%",
           maxWidth: "680px",
           maxHeight: "88vh",
-          background: "#161F30",
-          border: "1px solid #222F46",
+          background: "var(--bg-card)",
+          border: "1px solid var(--border-color)",
           borderRadius: "16px",
           display: "flex",
           flexDirection: "column",
@@ -143,7 +143,7 @@ export default function AddBlocklistModal({
             justifyContent: "space-between"
           }}
         >
-          <div style={{ fontSize: "18px", fontWeight: "700", color: "#F9FAFB" }}>
+          <div style={{ fontSize: "18px", fontWeight: "700", color: "var(--text-primary)" }}>
             Add a blocklist
           </div>
           <button
@@ -151,7 +151,7 @@ export default function AddBlocklistModal({
             style={{
               background: "transparent",
               border: "none",
-              color: "#94A3B8",
+              color: "var(--text-muted)",
               fontSize: "18px",
               cursor: "pointer",
               padding: "4px"
@@ -178,13 +178,13 @@ export default function AddBlocklistModal({
               display: "flex",
               alignItems: "center",
               gap: "8px",
-              background: "#0B0F17",
-              border: "1px solid #334155",
+              background: "var(--bg-canvas)",
+              border: "1px solid var(--border-color)",
               borderRadius: "20px",
               padding: "6px 14px"
             }}
           >
-            <span style={{ color: "#64748B", fontSize: "14px" }}>🔍</span>
+            <span style={{ color: "var(--text-subtle)", fontSize: "14px" }}>🔍</span>
             <input
               type="text"
               value={search}
@@ -194,7 +194,7 @@ export default function AddBlocklistModal({
                 flex: 1,
                 background: "transparent",
                 border: "none",
-                color: "#F9FAFB",
+                color: "var(--text-primary)",
                 fontSize: "13px",
                 outline: "none"
               }}
@@ -202,7 +202,7 @@ export default function AddBlocklistModal({
             {search && (
               <button
                 onClick={() => setSearch("")}
-                style={{ background: "transparent", border: "none", color: "#64748B", cursor: "pointer", fontSize: "12px" }}
+                style={{ background: "transparent", border: "none", color: "var(--text-subtle)", cursor: "pointer", fontSize: "12px" }}
               >
                 ✕
               </button>
@@ -215,11 +215,11 @@ export default function AddBlocklistModal({
               value={sortBy}
               onChange={(e) => setSortBy(e.target.value as any)}
               style={{
-                background: "#0B0F17",
-                border: "1px solid #334155",
+                background: "var(--bg-canvas)",
+                border: "1px solid var(--border-color)",
                 borderRadius: "8px",
                 padding: "6px 12px",
-                color: "#F9FAFB",
+                color: "var(--text-primary)",
                 fontSize: "12px",
                 fontWeight: "600",
                 cursor: "pointer",
@@ -243,7 +243,7 @@ export default function AddBlocklistModal({
           }}
         >
           {filteredLists.length === 0 ? (
-            <div style={{ padding: "40px 20px", textAlign: "center", color: "#64748B", fontSize: "13px" }}>
+            <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-subtle)", fontSize: "13px" }}>
               Không tìm thấy bộ lọc nào phù hợp với "{search}"
             </div>
           ) : (
@@ -267,11 +267,11 @@ export default function AddBlocklistModal({
                   }}
                 >
                   <div style={{ flex: 1 }}>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#F9FAFB", marginBottom: "4px" }}>
+                    <div style={{ fontSize: "14px", fontWeight: "700", color: "var(--text-primary)", marginBottom: "4px" }}>
                       {b.name || b.id}
                     </div>
                     {b.description && (
-                      <div style={{ fontSize: "12px", color: "#94A3B8", lineHeight: 1.45, marginBottom: "6px" }}>
+                      <div style={{ fontSize: "12px", color: "var(--text-muted)", lineHeight: 1.45, marginBottom: "6px" }}>
                         {b.description}
                       </div>
                     )}
@@ -282,7 +282,7 @@ export default function AddBlocklistModal({
                         gap: "8px",
                         flexWrap: "wrap",
                         fontSize: "11px",
-                        color: "#64748B"
+                        color: "var(--text-subtle)"
                       }}
                     >
                       {b.website && (

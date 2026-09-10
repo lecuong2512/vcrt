@@ -1,3 +1,4 @@
+import { useTheme, ThemeProvider } from "./ThemeContext";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   fetchApi,
@@ -135,7 +136,14 @@ function BottomNav({ active, onSelect }: { active: Tab; onSelect: (t: Tab) => vo
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 z-50 pb-safe"
-      style={{ background: "#0B0F17", borderTop: "1px solid #222F46" }}
+      style={{
+        background: "var(--nav-bg)",
+        borderTop: "1px solid var(--nav-border)",
+        backdropFilter: "blur(16px)",
+        WebkitBackdropFilter: "blur(16px)",
+        boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.08)",
+        transition: "background-color 0.3s ease, border-color 0.3s ease"
+      }}
     >
       <div className="flex items-stretch" style={{ height: "64px" }}>
         {NAV_ITEMS.map((item) => {
@@ -144,22 +152,23 @@ function BottomNav({ active, onSelect }: { active: Tab; onSelect: (t: Tab) => vo
             <button
               key={item.id}
               onClick={() => onSelect(item.id)}
-              className="flex-1 flex flex-col items-center justify-center gap-[3px] touch-btn"
-              style={{ minHeight: 44, color: isActive ? "#3B82F6" : "#94A3B8" }}
+              className="flex-1 flex flex-col items-center justify-center gap-[4px] touch-btn relative"
+              style={{ minHeight: 44, color: isActive ? "var(--badge-text)" : "var(--text-muted)" }}
             >
-              <span style={{ fontSize: 18, lineHeight: 1 }}>{item.icon}</span>
-              <span style={{ fontSize: 10, fontWeight: isActive ? 600 : 400, letterSpacing: "0.02em" }}>
+              <span style={{ fontSize: 19, lineHeight: 1 }}>{item.icon}</span>
+              <span style={{ fontSize: 11, fontWeight: isActive ? 700 : 500, letterSpacing: "0.01em" }}>
                 {item.label}
               </span>
               {isActive && (
                 <span
                   className="absolute top-0"
                   style={{
-                    width: 32,
-                    height: 2,
-                    background: "#3B82F6",
-                    borderRadius: "0 0 2px 2px",
+                    width: 36,
+                    height: 3,
+                    background: "linear-gradient(90deg, #0284C7, #38BDF8)",
+                    borderRadius: "0 0 3px 3px",
                     marginTop: -1,
+                    boxShadow: "0 2px 8px rgba(56, 189, 248, 0.5)"
                   }}
                 />
               )}
@@ -271,7 +280,7 @@ function TrafficLineChart({
               </span>
             </span>
           ) : (
-            <span style={{ color: "#64748B" }}>
+            <span style={{ color: "var(--text-subtle)" }}>
               💡 Rê chuột hoặc chạm vào đường biểu đồ để xem chi tiết từng mốc
             </span>
           )}
@@ -452,7 +461,7 @@ function TrafficLineChart({
                   ? "translateX(5%)"
                   : "translateX(-50%)",
               background: "#0F172A",
-              border: "1px solid #334155",
+              border: "1px solid var(--border-color)",
               borderRadius: 8,
               padding: "7px 11px",
               boxShadow: "0 10px 25px -5px rgba(0, 0, 0, 0.7), 0 8px 10px -6px rgba(0, 0, 0, 0.7)",
@@ -461,7 +470,7 @@ function TrafficLineChart({
               minWidth: 155
             }}
           >
-            <div style={{ fontSize: 11, fontWeight: 700, color: "#F8FAFC", marginBottom: 4, borderBottom: "1px solid #1E293B", paddingBottom: 2 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4, borderBottom: "1px solid #1E293B", paddingBottom: 2 }}>
               📅 {activeItem.label}
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, fontSize: 11 }}>
@@ -609,7 +618,7 @@ function DashboardScreen() {
       <div className="flex items-center justify-between pt-1">
         <div>
           <div className="flex items-center gap-2">
-            <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: "0.04em", color: "#F9FAFB" }}>
+            <span style={{ fontWeight: 800, fontSize: 20, letterSpacing: "0.04em", color: "var(--text-primary)" }}>
               VCRT
             </span>
             <span
@@ -620,7 +629,7 @@ function DashboardScreen() {
                 borderRadius: 6,
                 background: "#1E293B",
                 color: "#38BDF8",
-                border: "1px solid #334155"
+                border: "1px solid var(--border-color)"
               }}
             >
               {hwInfo.device_name}
@@ -636,7 +645,7 @@ function DashboardScreen() {
               }}
             />
           </div>
-          <div className="mono" style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>
+          <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>
             {hwInfo.os_version} (Linux {hwInfo.kernel_version}) · {uptime}
           </div>
         </div>
@@ -656,13 +665,13 @@ function DashboardScreen() {
       </div>
 
       {/* CARD 1: NGUỒN CẤP INTERNET (Đang bắt mạng từ đâu để phát ra) */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #1E3A5F", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid #1E3A5F", padding: 16 }}>
         <div className="flex justify-between items-center mb-3">
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 16 }}>
               {uplink.type === "repeater" ? "📡" : uplink.type === "ethernet" ? "🔌" : uplink.type === "cellular" ? "📶" : "⚠️"}
             </span>
-            <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 600 }}>NGUỒN CẤP INTERNET (UPLINK)</span>
+            <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>NGUỒN CẤP INTERNET (UPLINK)</span>
           </div>
           <div className="flex items-center gap-2">
             <span
@@ -696,45 +705,45 @@ function DashboardScreen() {
         {uplink.type === "repeater" ? (
           <div>
             <div className="flex items-baseline justify-between mb-2">
-              <div style={{ fontSize: 11, color: "#94A3B8" }}>Đang bắt sóng từ Wi-Fi:</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Đang bắt sóng từ Wi-Fi:</div>
               <div className="mono" style={{ fontSize: 15, fontWeight: 700, color: "#38BDF8" }}>
                 {uplink.ssid}
               </div>
             </div>
 
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3" style={{ background: "#0B0F17", borderRadius: 12, padding: 12 }}>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 mt-3" style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 12 }}>
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>🏢 Nhà mạng (ISP)</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>🏢 Nhà mạng (ISP)</div>
                 <div className="mono" style={{ fontSize: 12, fontWeight: 700, color: "#10B981", marginTop: 2 }}>
                   {uplink.isp || "Viettel Group"}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>Tần số & Kênh</div>
-                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "#F9FAFB", marginTop: 2 }}>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Tần số & Kênh</div>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginTop: 2 }}>
                   {uplink.band} · Kênh {uplink.channel}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>Cường độ sóng</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Cường độ sóng</div>
                 <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: uplink.signal_pct > 60 ? "#10B981" : "#F59E0B", marginTop: 2 }}>
                   {uplink.signal_dbm} dBm ({uplink.signal_pct}%)
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>Gateway nguồn</div>
-                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "#F9FAFB", marginTop: 2 }}>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Gateway nguồn</div>
+                <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "var(--text-primary)", marginTop: 2 }}>
                   {uplink.gateway}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>IP WAN nhận được</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>IP WAN nhận được</div>
                 <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "#38BDF8", marginTop: 2 }}>
                   {wanIp}
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>Trạng thái mạng</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>Trạng thái mạng</div>
                 <div className="mono" style={{ fontSize: 12, fontWeight: 600, color: "#10B981", marginTop: 2 }}>
                   Đang kết nối ●
                 </div>
@@ -742,12 +751,12 @@ function DashboardScreen() {
             </div>
           </div>
         ) : (
-          <div style={{ background: "#0B0F17", borderRadius: 12, padding: 12 }}>
+          <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 12 }}>
             <div className="flex justify-between items-center">
-              <div style={{ fontSize: 13, fontWeight: 600, color: "#F9FAFB" }}>{uplink.title}</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>{uplink.title}</div>
               <span style={{ fontSize: 11, color: "#10B981", fontWeight: 700 }}>🏢 {uplink.isp || "Viettel Group"}</span>
             </div>
-            <div className="mono" style={{ fontSize: 11, color: "#94A3B8", marginTop: 4 }}>
+            <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
               Gateway: {uplink.gateway} · IP WAN: {wanIp}
             </div>
           </div>
@@ -755,10 +764,10 @@ function DashboardScreen() {
       </div>
 
       {/* CARD 2: SƠ ĐỒ CÁC CỔNG VẬT LÝ (SWITCH & USB) */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 16 }}>
         <div className="flex justify-between items-center mb-3">
-          <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 600 }}>TRẠNG THÁI CÁC CỔNG VẬT LÝ</span>
-          <span className="mono" style={{ fontSize: 10, color: "#64748B" }}>MT7620 SWITCH & USB</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>TRẠNG THÁI CÁC CỔNG VẬT LÝ</span>
+          <span className="mono" style={{ fontSize: 10, color: "var(--text-subtle)" }}>MT7620 SWITCH & USB</span>
         </div>
         <div className="grid grid-cols-2 gap-2">
           {/* Cổng WAN */}
@@ -771,7 +780,7 @@ function DashboardScreen() {
             }}
           >
             <div className="flex items-center justify-between">
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#F9FAFB" }}>🌐 Cổng WAN</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>🌐 Cổng WAN</span>
               <span style={{ fontSize: 10 }}>{ports.wan.up ? "🟢 UP" : "⚪ DOWN"}</span>
             </div>
             <div style={{ fontSize: 10, color: ports.wan.up ? "#10B981" : "#64748B", marginTop: 4 }}>
@@ -789,7 +798,7 @@ function DashboardScreen() {
             }}
           >
             <div className="flex items-center justify-between">
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#F9FAFB" }}>💻 LAN 1</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>💻 LAN 1</span>
               <span style={{ fontSize: 10 }}>{ports.lan1.up ? "🟢 UP" : "⚪ DOWN"}</span>
             </div>
             <div style={{ fontSize: 10, color: ports.lan1.up ? "#10B981" : "#64748B", marginTop: 4 }}>
@@ -807,7 +816,7 @@ function DashboardScreen() {
             }}
           >
             <div className="flex items-center justify-between">
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#F9FAFB" }}>🖥 LAN 2</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>🖥 LAN 2</span>
               <span style={{ fontSize: 10 }}>{ports.lan2.up ? "🟢 UP" : "⚪ DOWN"}</span>
             </div>
             <div style={{ fontSize: 10, color: ports.lan2.up ? "#10B981" : "#64748B", marginTop: 4 }}>
@@ -825,7 +834,7 @@ function DashboardScreen() {
             }}
           >
             <div className="flex items-center justify-between">
-              <span style={{ fontSize: 11, fontWeight: 600, color: "#F9FAFB" }}>🔌 Cổng USB 2.0</span>
+              <span style={{ fontSize: 11, fontWeight: 600, color: "var(--text-primary)" }}>🔌 Cổng USB 2.0</span>
               <span style={{ fontSize: 10 }}>{ports.usb.connected ? "🔵 CẮM" : "⚪ TRỐNG"}</span>
             </div>
             <div
@@ -846,63 +855,63 @@ function DashboardScreen() {
       </div>
 
       {/* CARD 3: BĂNG THÔNG THỰC TẾ & BĂNG THÔNG TỐI ĐA (SIDE-BY-SIDE) */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: "16px" }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: "16px" }}>
         <div className="flex justify-between items-center mb-3">
-          <span style={{ fontSize: 12, color: "#94A3B8", fontWeight: 600 }}>BĂNG THÔNG ĐƯỜNG TRUYỀN (LIVE 2s)</span>
+          <span style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>BĂNG THÔNG ĐƯỜNG TRUYỀN (LIVE 2s)</span>
           <span style={{ fontSize: 10, color: "#3B82F6" }} className="mono">● HARDWARE NAT</span>
         </div>
 
         {/* 2 Ô BÊN CẠNH NHAU: TỐC ĐỘ HIỆN TẠI & BĂNG THÔNG TỐI ĐA ĐẠT ĐƯỢC */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
           {/* Ô 1: Tốc độ hiện tại */}
-          <div style={{ background: "#0B0F17", borderRadius: 12, padding: 12, border: "1px solid #1E293B" }}>
+          <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 12, border: "1px solid var(--border-color)" }}>
             <div className="flex justify-between items-center mb-2">
-              <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>⚡ TỐC ĐỘ THỰC TẾ HIỆN TẠI</span>
+              <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>⚡ TỐC ĐỘ THỰC TẾ HIỆN TẠI</span>
               <span className="pulse-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} />
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>📥 Download</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>📥 Download</div>
                 <div className="mono" style={{ fontSize: 22, fontWeight: 800, color: "#3B82F6", lineHeight: 1.1 }}>
                   {dlMbps}
-                  <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: 3 }}>Mbps</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 3 }}>Mbps</span>
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>📤 Upload</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>📤 Upload</div>
                 <div className="mono" style={{ fontSize: 22, fontWeight: 800, color: "#10B981", lineHeight: 1.1 }}>
                   {ulMbps}
-                  <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: 3 }}>Mbps</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 3 }}>Mbps</span>
                 </div>
               </div>
             </div>
           </div>
 
           {/* Ô 2 (BÊN CẠNH): BĂNG THÔNG TỐI ĐA ĐÃ ĐẠT ĐƯỢC */}
-          <div style={{ background: "#0B0F17", borderRadius: 12, padding: 12, border: "1px solid #1E293B" }}>
+          <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 12, border: "1px solid var(--border-color)" }}>
             <div className="flex justify-between items-center mb-2">
               <span style={{ fontSize: 11, color: "#F59E0B", fontWeight: 700 }}>🚀 BĂNG THÔNG TỐI ĐA ĐẠT ĐƯỢC</span>
               <button
                 onClick={handleResetPeak}
                 title="Đặt lại mức đỉnh"
-                style={{ background: "#1E293B", border: "none", color: "#94A3B8", fontSize: 10, padding: "2px 6px", borderRadius: 4, cursor: "pointer" }}
+                style={{ background: "#1E293B", border: "none", color: "var(--text-muted)", fontSize: 10, padding: "2px 6px", borderRadius: 4, cursor: "pointer" }}
               >
                 ↺ Đặt lại
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>📥 Đỉnh Download</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>📥 Đỉnh Download</div>
                 <div className="mono" style={{ fontSize: 22, fontWeight: 800, color: "#60A5FA", lineHeight: 1.1 }}>
                   {peakBw.dl_mbps}
-                  <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: 3 }}>Mbps</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 3 }}>Mbps</span>
                 </div>
               </div>
               <div>
-                <div style={{ fontSize: 10, color: "#94A3B8" }}>📤 Đỉnh Upload</div>
+                <div style={{ fontSize: 10, color: "var(--text-muted)" }}>📤 Đỉnh Upload</div>
                 <div className="mono" style={{ fontSize: 22, fontWeight: 800, color: "#34D399", lineHeight: 1.1 }}>
                   {peakBw.ul_mbps}
-                  <span style={{ fontSize: 11, color: "#94A3B8", marginLeft: 3 }}>Mbps</span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 3 }}>Mbps</span>
                 </div>
               </div>
             </div>
@@ -931,23 +940,23 @@ function DashboardScreen() {
       {/* CARD 4: PHẦN CỨNG, BỘ NHỚ RAM VÀ FLASH ROM */}
       <div className="grid grid-cols-2 gap-3">
         {/* CPU & RAM */}
-        <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 14 }}>
-          <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>CPU LOAD THỰC</div>
+        <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 14 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>CPU LOAD THỰC</div>
           <div className="mono" style={{ fontSize: 28, fontWeight: 700, color: cpuColor }}>
             {cpu}<span style={{ fontSize: 14 }}>%</span>
           </div>
-          <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>MT7620A · 580MHz</div>
+          <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>MT7620A · 580MHz</div>
           <div style={{ height: 4, background: "#222F46", borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
             <div style={{ width: `${Math.min(100, Math.max(0, cpu))}%`, height: "100%", background: cpuColor, borderRadius: 2, transition: "width 0.5s ease" }} />
           </div>
         </div>
 
         {/* RAM */}
-        <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 14 }}>
-          <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>BỘ NHỚ RAM</div>
-          <div className="mono" style={{ fontSize: 20, fontWeight: 700, color: "#F9FAFB" }}>
-            {ramUsed}<span style={{ fontSize: 12, color: "#94A3B8" }}>MB</span>
-            <span style={{ fontSize: 11, color: "#64748B", fontWeight: 400 }}> / {ramTotal}MB</span>
+        <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 14 }}>
+          <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>BỘ NHỚ RAM</div>
+          <div className="mono" style={{ fontSize: 20, fontWeight: 700, color: "var(--text-primary)" }}>
+            {ramUsed}<span style={{ fontSize: 12, color: "var(--text-muted)" }}>MB</span>
+            <span style={{ fontSize: 11, color: "var(--text-subtle)", fontWeight: 400 }}> / {ramTotal}MB</span>
           </div>
           <div style={{ fontSize: 10, color: "#10B981", marginTop: 2 }}>{ramAvail} MB khả dụng</div>
           <div style={{ height: 4, background: "#222F46", borderRadius: 2, marginTop: 8, overflow: "hidden" }}>
@@ -957,17 +966,17 @@ function DashboardScreen() {
       </div>
 
       {/* FLASH ROM CARD */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 14 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 14 }}>
         <div className="flex justify-between items-center mb-2">
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 14 }}>💾</span>
-            <span style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>BỘ NHỚ FLASH ROM</span>
+            <span style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>BỘ NHỚ FLASH ROM</span>
           </div>
           <span className="mono" style={{ fontSize: 11, color: "#38BDF8", fontWeight: 700 }}>
             {hwInfo.flash.chip_mb || 16.0} MB SPI FLASH
           </span>
         </div>
-        <div style={{ height: 6, background: "#0B0F17", borderRadius: 3, overflow: "hidden" }}>
+        <div style={{ height: 6, background: "var(--bg-canvas)", borderRadius: 3, overflow: "hidden" }}>
           <div
             style={{
               width: `${Math.min(100, Math.max(0, hwInfo.flash.overlay_pct || hwInfo.flash.used_pct || 0))}%`,
@@ -981,25 +990,25 @@ function DashboardScreen() {
           <span style={{ fontSize: 10, color: "#10B981" }}>
             Overlay trống: {hwInfo.flash.overlay_avail_mb || hwInfo.flash.avail_mb} MB / {hwInfo.flash.overlay_total_mb || 4} MB
           </span>
-          <span style={{ fontSize: 10, color: "#94A3B8" }}>
+          <span style={{ fontSize: 10, color: "var(--text-muted)" }}>
             Đã dùng: {hwInfo.flash.overlay_pct || hwInfo.flash.used_pct}%
           </span>
         </div>
-        <div style={{ fontSize: 9, color: "#64748B", marginTop: 4, textAlign: "right" }}>
+        <div style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 4, textAlign: "right" }}>
           * Phân vùng Hệ thống (Kernel + SquashFS): ~12 MB (Chỉ đọc bảo vệ)
         </div>
       </div>
 
       {/* CARD: DỮ LIỆU ĐÃ DÙNG (HIỂN THỊ RÕ SỐ LƯỢNG & BIỂU ĐỒ ĐƯỜNG TƯƠNG TÁC) */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 16 }}>
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
           <div>
-            <div style={{ fontSize: 12, color: "#94A3B8", fontWeight: 600 }}>DỮ LIỆU ĐÃ DÙNG (DATA CONSUMPTION)</div>
-            <div style={{ fontSize: 10, color: "#64748B" }}>Theo dõi chính xác dung lượng mạng đã dùng qua cổng WAN</div>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", fontWeight: 600 }}>DỮ LIỆU ĐÃ DÙNG (DATA CONSUMPTION)</div>
+            <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>Theo dõi chính xác dung lượng mạng đã dùng qua cổng WAN</div>
           </div>
 
           {/* Bộ lọc chu kỳ: [ Hôm nay | 7 ngày | 1 tháng | 1 quý | 1 năm ] */}
-          <div style={{ display: "flex", gap: 3, background: "#0B0F17", padding: 3, borderRadius: 10, border: "1px solid #1E293B" }}>
+          <div style={{ display: "flex", gap: 3, background: "var(--bg-canvas)", padding: 3, borderRadius: 10, border: "1px solid var(--border-color)" }}>
             {[
               { id: "today", label: "Hôm nay" },
               { id: "7d", label: "7 ngày" },
@@ -1074,46 +1083,46 @@ function DashboardScreen() {
               >
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                   <div>
-                    <div style={{ fontSize: 11, color: "#94A3B8", fontWeight: 600 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", fontWeight: 600 }}>
                       TỔNG DUNG LƯỢNG ĐÃ DÙNG ({periodNames[trafficPeriod].toUpperCase()})
                     </div>
                     <div className="flex items-baseline gap-2 mt-1">
                       <span className="mono" style={{ fontSize: 28, fontWeight: 900, color: "#F59E0B", letterSpacing: "-0.03em" }}>
                         {curData.total}
                       </span>
-                      <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                      <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
                         (Tải về: <strong style={{ color: "#38BDF8" }}>{curData.dl}</strong> · Tải lên: <strong style={{ color: "#10B981" }}>{curData.ul}</strong>)
                       </span>
                     </div>
                   </div>
-                  <div style={{ fontSize: 10, color: "#64748B", textAlign: "right" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-subtle)", textAlign: "right" }}>
                     <div>Nhà mạng: <strong style={{ color: "#10B981" }}>{uplink.isp || "Viettel Group"}</strong></div>
-                    <div style={{ marginTop: 2 }}>Cổng mạng: <strong style={{ color: "#94A3B8" }}>{uplink.type === "repeater" ? "Wi-Fi WISP" : "Cáp WAN"}</strong></div>
+                    <div style={{ marginTop: 2 }}>Cổng mạng: <strong style={{ color: "var(--text-muted)" }}>{uplink.type === "repeater" ? "Wi-Fi WISP" : "Cáp WAN"}</strong></div>
                   </div>
                 </div>
               </div>
 
               {/* 3 Thẻ số liệu chi tiết: Tải về, Tải lên, Tổng cộng */}
               <div className="grid grid-cols-3 gap-2 mb-3">
-                <div style={{ background: "#0B0F17", borderRadius: 12, padding: "10px 8px", textAlign: "center", border: "1px solid #1E293B" }}>
-                  <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>📥 TẢI VỀ (DOWNLOAD)</div>
+                <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: "10px 8px", textAlign: "center", border: "1px solid var(--border-color)" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>📥 TẢI VỀ (DOWNLOAD)</div>
                   <div className="mono" style={{ fontSize: 17, fontWeight: 800, color: "#38BDF8" }}>{curData.dl}</div>
-                  <div style={{ fontSize: 9, color: "#64748B", marginTop: 2 }}>Dung lượng nhận</div>
+                  <div style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 2 }}>Dung lượng nhận</div>
                 </div>
-                <div style={{ background: "#0B0F17", borderRadius: 12, padding: "10px 8px", textAlign: "center", border: "1px solid #1E293B" }}>
-                  <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>📤 TẢI LÊN (UPLOAD)</div>
+                <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: "10px 8px", textAlign: "center", border: "1px solid var(--border-color)" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>📤 TẢI LÊN (UPLOAD)</div>
                   <div className="mono" style={{ fontSize: 17, fontWeight: 800, color: "#10B981" }}>{curData.ul}</div>
-                  <div style={{ fontSize: 9, color: "#64748B", marginTop: 2 }}>Dung lượng gửi</div>
+                  <div style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 2 }}>Dung lượng gửi</div>
                 </div>
-                <div style={{ background: "#0B0F17", borderRadius: 12, padding: "10px 8px", textAlign: "center", border: "1px solid #1E293B" }}>
-                  <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>🌐 TỔNG CỘNG</div>
+                <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: "10px 8px", textAlign: "center", border: "1px solid var(--border-color)" }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>🌐 TỔNG CỘNG</div>
                   <div className="mono" style={{ fontSize: 17, fontWeight: 800, color: "#F59E0B" }}>{curData.total}</div>
-                  <div style={{ fontSize: 9, color: "#64748B", marginTop: 2 }}>Tổng trong chu kỳ</div>
+                  <div style={{ fontSize: 9, color: "var(--text-subtle)", marginTop: 2 }}>Tổng trong chu kỳ</div>
                 </div>
               </div>
 
               {/* Biểu đồ đường hiển thị trực quan (Line Chart với tương tác trỏ chuột) */}
-              <div style={{ background: "#0B0F17", borderRadius: 12, padding: "12px 14px", border: "1px solid #1E293B" }}>
+              <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: "12px 14px", border: "1px solid var(--border-color)" }}>
                 <TrafficLineChart items={chartItems} unit={unit} />
               </div>
             </div>
@@ -1239,15 +1248,15 @@ function ClientsScreen() {
     <div className="flex flex-col gap-3 p-4 mb-nav">
       <div className="pt-1 flex items-center justify-between">
         <div>
-          <div style={{ fontSize: 13, color: "#94A3B8", fontWeight: 500 }}>KIỂM SOÁT THIẾT BỊ THỰC TẾ</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#F9FAFB" }}>
+          <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>KIỂM SOÁT THIẾT BỊ THỰC TẾ</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>
             Quản lý mạng ({connectedList.length} trực tuyến)
           </div>
         </div>
         <button
           onClick={fetchClients}
           className="touch-btn"
-          style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 10, padding: "8px 12px", color: "#3B82F6", fontSize: 12, fontWeight: 600 }}
+          style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "8px 12px", color: "#3B82F6", fontSize: 12, fontWeight: 600 }}
         >
           Làm mới ⟳
         </button>
@@ -1276,9 +1285,9 @@ function ClientsScreen() {
       </div>
 
       {loading && clients.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>Đang quét thiết bị mạng...</div>
+        <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>Đang quét thiết bị mạng...</div>
       ) : currentList.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 40, color: "#94A3B8" }}>
+        <div style={{ textAlign: "center", padding: 40, color: "var(--text-muted)" }}>
           {filter === "connected"
             ? "Không có thiết bị nào đang kết nối lúc này."
             : filter === "soft"
@@ -1301,10 +1310,10 @@ function ClientsScreen() {
           <div className="flex items-center gap-3 mb-3">
             <span style={{ fontSize: 26 }}>{c.icon}</span>
             <div className="flex-1 min-w-0">
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#F9FAFB" }} className="truncate">
+              <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)" }} className="truncate">
                 {c.name}
               </div>
-              <div className="mono" style={{ fontSize: 11, color: "#94A3B8" }}>
+              <div className="mono" style={{ fontSize: 11, color: "var(--text-muted)" }}>
                 {c.ip} · {c.mac}
               </div>
               {!c.blocked && !c.softBlocked && (
@@ -1327,7 +1336,7 @@ function ClientsScreen() {
               {!c.blocked && !c.softBlocked && c.band !== "Dây LAN" && (
                 <div className="flex items-center gap-1 mt-1">
                   <SignalBars rssi={c.rssi} />
-                  <span className="mono" style={{ fontSize: 10, color: "#94A3B8" }}>{c.rssi}dBm</span>
+                  <span className="mono" style={{ fontSize: 10, color: "var(--text-muted)" }}>{c.rssi}dBm</span>
                 </div>
               )}
             </div>
@@ -1338,7 +1347,7 @@ function ClientsScreen() {
             <div className="flex flex-col gap-2 mt-2">
               <div
                 style={{
-                  background: "#0B0F17",
+                  background: "var(--bg-canvas)",
                   borderRadius: 12,
                   padding: "10px 12px",
                   border: `1px solid ${c.blocked ? "#7F1D1D" : "#78350F"}`,
@@ -1351,7 +1360,7 @@ function ClientsScreen() {
                   <div style={{ fontSize: 11, fontWeight: 700, color: c.blocked ? "#F87171" : "#FBBF24" }}>
                     ⚠️ {c.blocked ? "ĐANG CỐ KẾT NỐI (BỊ ĐÁ RA)" : "ĐANG CỐ TRUY CẬP (BỊ CHẶN INTERNET)"}
                   </div>
-                  <div style={{ fontSize: 10, color: "#94A3B8", marginTop: 2 }}>
+                  <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>
                     Tự động biến mất khi hết giờ hoặc ngắt kết nối
                   </div>
                 </div>
@@ -1398,7 +1407,7 @@ function ClientsScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" style={{ padding: 20 }}>
           <div
             style={{
-              background: "#161F30",
+              background: "var(--bg-card)",
               borderRadius: 24,
               border: `1px solid ${blockModal.type === "soft" ? "#F59E0B" : "#EF4444"}`,
               padding: 24,
@@ -1412,8 +1421,8 @@ function ClientsScreen() {
               onClick={() => setBlockModal(null)}
               style={{
                 position: "absolute", top: 16, right: 16, width: 32, height: 32,
-                borderRadius: "50%", background: "#222F46", border: "1px solid #334155",
-                color: "#94A3B8", display: "flex", alignItems: "center", justifyContent: "center",
+                borderRadius: "50%", background: "#222F46", border: "1px solid var(--border-color)",
+                color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 16, fontWeight: 700, cursor: "pointer"
               }}
             >
@@ -1422,13 +1431,13 @@ function ClientsScreen() {
 
             <div className="flex items-center gap-2 mb-2">
               <span style={{ fontSize: 22 }}>{blockModal.type === "soft" ? "✂️" : "🚫"}</span>
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#F9FAFB" }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
                 {blockModal.type === "soft" ? "Cắt Internet (Cấp 1)" : "Đá Khỏi Wi-Fi (Cấp 2)"}
               </span>
             </div>
 
-            <div style={{ fontSize: 13, color: "#94A3B8", marginBottom: 14 }}>
-              Thiết bị: <strong style={{ color: "#F9FAFB" }}>{blockModal.device.name}</strong> ({blockModal.device.ip})
+            <div style={{ fontSize: 13, color: "var(--text-muted)", marginBottom: 14 }}>
+              Thiết bị: <strong style={{ color: "var(--text-primary)" }}>{blockModal.device.name}</strong> ({blockModal.device.ip})
             </div>
 
             <div style={{ fontSize: 12, fontWeight: 600, color: "#CBD5E1", marginBottom: 8 }}>
@@ -1465,7 +1474,7 @@ function ClientsScreen() {
 
             {/* Hoặc tự nhập số phút */}
             <div style={{ marginBottom: 16 }}>
-              <label style={{ fontSize: 11, color: "#94A3B8", display: "block", marginBottom: 4 }}>
+              <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>
                 Hoặc tự nhập số phút tùy chỉnh:
               </label>
               <input
@@ -1475,8 +1484,8 @@ function ClientsScreen() {
                 value={customMinutes}
                 onChange={(e) => setCustomMinutes(e.target.value)}
                 style={{
-                  width: "100%", background: "#0B0F17", border: "1px solid #334155",
-                  borderRadius: 10, padding: "10px 14px", color: "#F9FAFB", fontSize: 14, outline: "none"
+                  width: "100%", background: "var(--bg-canvas)", border: "1px solid var(--border-color)",
+                  borderRadius: 10, padding: "10px 14px", color: "var(--text-primary)", fontSize: 14, outline: "none"
                 }}
               />
             </div>
@@ -1485,7 +1494,7 @@ function ClientsScreen() {
               <button
                 onClick={() => setBlockModal(null)}
                 className="touch-btn flex-1 py-[12px] rounded-xl"
-                style={{ background: "#222F46", color: "#94A3B8", fontSize: 13, fontWeight: 600, border: "none" }}
+                style={{ background: "#222F46", color: "var(--text-muted)", fontSize: 13, fontWeight: 600, border: "none" }}
               >
                 Hủy Bỏ
               </button>
@@ -1605,17 +1614,17 @@ function WiFiScreen() {
   };
 
   const inputStyle = {
-    width: "100%", background: "#0B0F17", border: "1px solid #222F46",
-    borderRadius: 10, padding: "11px 14px", color: "#F9FAFB",
+    width: "100%", background: "var(--bg-canvas)", border: "1px solid var(--border-color)",
+    borderRadius: 10, padding: "11px 14px", color: "var(--text-primary)",
     fontSize: 14, outline: "none", fontFamily: "inherit",
   };
-  const labelStyle = { fontSize: 11, color: "#94A3B8", marginBottom: 4, display: "block" as const };
+  const labelStyle = { fontSize: 11, color: "var(--text-muted)", marginBottom: 4, display: "block" as const };
 
   return (
     <div className="flex flex-col gap-3 p-4 mb-nav">
       <div className="pt-1">
-        <div style={{ fontSize: 13, color: "#94A3B8", fontWeight: 500 }}>CẤU HÌNH PHẦN CỨNG</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#F9FAFB" }}>Quản lý Wi-Fi</div>
+        <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>CẤU HÌNH PHẦN CỨNG</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Quản lý Wi-Fi</div>
       </div>
 
       {statusMsg && (
@@ -1630,10 +1639,10 @@ function WiFiScreen() {
       )}
 
       {/* 5GHz Card */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #1E3A5F", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid #1E3A5F", padding: 16 }}>
         <div className="flex items-center gap-2 mb-4">
           <span style={{ background: "#1E3A5F", color: "#3B82F6", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 6 }}>5 GHz</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#F9FAFB" }}>Băng tần cao tốc (MT7612E)</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Băng tần cao tốc (MT7612E)</span>
         </div>
         <div className="flex flex-col gap-3">
           <div>
@@ -1644,7 +1653,7 @@ function WiFiScreen() {
             <label style={labelStyle}>Mật khẩu Wi-Fi</label>
             <div style={{ position: "relative" }}>
               <input style={{ ...inputStyle, paddingRight: 44 }} type={show5 ? "text" : "password"} value={pass5} onChange={(e) => setPass5(e.target.value)} placeholder="Tối thiểu 8 ký tự" />
-              <button onClick={() => setShow5(!show5)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 16 }}>
+              <button onClick={() => setShow5(!show5)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 16 }}>
                 {show5 ? "🙈" : "👁"}
               </button>
             </div>
@@ -1654,7 +1663,7 @@ function WiFiScreen() {
               <label style={labelStyle}>Kênh phát</label>
               <select style={{ ...inputStyle }} value={ch5} onChange={(e) => setCh5(e.target.value)}>
                 {["auto", "36", "40", "44", "48", "149", "153", "157", "161"].map((ch) => (
-                  <option key={ch} value={ch} style={{ background: "#161F30" }}>{ch === "auto" ? "Tự động (Auto)" : `Kênh ${ch}`}</option>
+                  <option key={ch} value={ch} style={{ background: "var(--bg-card)" }}>{ch === "auto" ? "Tự động (Auto)" : `Kênh ${ch}`}</option>
                 ))}
               </select>
             </div>
@@ -1662,7 +1671,7 @@ function WiFiScreen() {
               <label style={labelStyle}>Công suất (dBm)</label>
               <select style={{ ...inputStyle }} value={power5} onChange={(e) => setPower5(e.target.value)}>
                 {["14", "17", "20", "23"].map((p) => (
-                  <option key={p} value={p} style={{ background: "#161F30" }}>{p} dBm</option>
+                  <option key={p} value={p} style={{ background: "var(--bg-card)" }}>{p} dBm</option>
                 ))}
               </select>
             </div>
@@ -1671,10 +1680,10 @@ function WiFiScreen() {
       </div>
 
       {/* 2.4GHz Card */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #1A2E1E", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid #1A2E1E", padding: 16 }}>
         <div className="flex items-center gap-2 mb-4">
           <span style={{ background: "#1A2E1E", color: "#10B981", fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 6 }}>2.4 GHz</span>
-          <span style={{ fontSize: 13, fontWeight: 600, color: "#F9FAFB" }}>Băng tần xuyên tường (MT7620)</span>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)" }}>Băng tần xuyên tường (MT7620)</span>
         </div>
         <div className="flex flex-col gap-3">
           <div>
@@ -1685,7 +1694,7 @@ function WiFiScreen() {
             <label style={labelStyle}>Mật khẩu Wi-Fi</label>
             <div style={{ position: "relative" }}>
               <input style={{ ...inputStyle, paddingRight: 44 }} type={show24 ? "text" : "password"} value={pass24} onChange={(e) => setPass24(e.target.value)} placeholder="Tối thiểu 8 ký tự" />
-              <button onClick={() => setShow24(!show24)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 16 }}>
+              <button onClick={() => setShow24(!show24)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 16 }}>
                 {show24 ? "🙈" : "👁"}
               </button>
             </div>
@@ -1695,7 +1704,7 @@ function WiFiScreen() {
               <label style={labelStyle}>Kênh phát</label>
               <select style={{ ...inputStyle }} value={ch24} onChange={(e) => setCh24(e.target.value)}>
                 {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"].map((ch) => (
-                  <option key={ch} value={ch} style={{ background: "#161F30" }}>Kênh {ch}</option>
+                  <option key={ch} value={ch} style={{ background: "var(--bg-card)" }}>Kênh {ch}</option>
                 ))}
               </select>
             </div>
@@ -1703,7 +1712,7 @@ function WiFiScreen() {
               <label style={labelStyle}>Công suất (dBm)</label>
               <select style={{ ...inputStyle }} value={power24} onChange={(e) => setPower24(e.target.value)}>
                 {["14", "17", "20", "23"].map((p) => (
-                  <option key={p} value={p} style={{ background: "#161F30" }}>{p} dBm</option>
+                  <option key={p} value={p} style={{ background: "var(--bg-card)" }}>{p} dBm</option>
                 ))}
               </select>
             </div>
@@ -1712,17 +1721,17 @@ function WiFiScreen() {
       </div>
 
             {/* NGUỒN WI-FI UPLINK & QUÉT SÓNG (WISP REPEATER) */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #334155", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 16 }}>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 16 }}>📡</span>
-            <span style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Nguồn Wi-Fi Kích Sóng (WISP Repeater)</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>Nguồn Wi-Fi Kích Sóng (WISP Repeater)</span>
           </div>
           <span style={{ fontSize: 11, background: "#1E293B", color: "#38BDF8", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>
             Thay đổi Uplink
           </span>
         </div>
-        <p style={{ fontSize: 12, color: "#94A3B8", marginBottom: 12, lineHeight: 1.4 }}>
+        <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 12, lineHeight: 1.4 }}>
           Quét sóng Wi-Fi môi trường xung quanh để đổi nguồn kết nối Internet không dây cho router.
         </p>
         <div className="flex gap-2">
@@ -1766,25 +1775,25 @@ function WiFiScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" style={{ padding: 16 }}>
           <div
             style={{
-              background: "#161F30", borderRadius: 24, border: "1px solid #334155",
+              background: "var(--bg-card)", borderRadius: 24, border: "1px solid var(--border-color)",
               padding: 20, width: "100%", maxWidth: 440, maxHeight: "85vh", display: "flex", flexDirection: "column",
               position: "relative", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.75)"
             }}
           >
             <div className="flex items-center justify-between pb-3 border-b border-[#222F46] mb-3">
               <div>
-                <div style={{ fontSize: 16, fontWeight: 700, color: "#F9FAFB" }}>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
                   {scanningBand ? "Đang dò tìm sóng Wi-Fi..." : "Kết Quả Quét Sóng Wi-Fi"}
                 </div>
-                <div style={{ fontSize: 11, color: "#94A3B8" }}>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
                   {scanningBand ? "Vui lòng chờ trong giây lát" : `Tìm thấy ${scannedNetworks.length} mạng khả dụng`}
                 </div>
               </div>
               <button
                 onClick={() => setScanModalOpen(false)}
                 style={{
-                  width: 30, height: 30, borderRadius: "50%", background: "#222F46", border: "1px solid #334155",
-                  color: "#94A3B8", display: "flex", alignItems: "center", justifyContent: "center",
+                  width: 30, height: 30, borderRadius: "50%", background: "#222F46", border: "1px solid var(--border-color)",
+                  color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 14, fontWeight: 700, cursor: "pointer"
                 }}
               >
@@ -1806,7 +1815,7 @@ function WiFiScreen() {
             {!scanningBand && (
               <div className="flex flex-col gap-2 overflow-y-auto pr-1" style={{ flex: 1, minHeight: 180 }}>
                 {scannedNetworks.length === 0 ? (
-                  <div className="text-center py-8 text-sm" style={{ color: "#94A3B8" }}>
+                  <div className="text-center py-8 text-sm" style={{ color: "var(--text-muted)" }}>
                     Không tìm thấy mạng Wi-Fi nào hoặc sóng quá yếu.
                   </div>
                 ) : (
@@ -1825,12 +1834,12 @@ function WiFiScreen() {
                     >
                       <div className="flex flex-col gap-0.5">
                         <div className="flex items-center gap-1.5">
-                          <span style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>{net.ssid}</span>
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>{net.ssid}</span>
                           {net.encryption && net.encryption !== "none" && (
                             <span style={{ fontSize: 10 }}>🔒</span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2" style={{ fontSize: 11, color: "#94A3B8" }}>
+                        <div className="flex items-center gap-2" style={{ fontSize: 11, color: "var(--text-muted)" }}>
                           <span>Kênh {net.channel}</span>
                           <span>·</span>
                           <span className="mono">{net.signal} dBm</span>
@@ -1869,7 +1878,7 @@ function WiFiScreen() {
                     <button
                       type="button"
                       onClick={() => setShowUplinkPass(!showUplinkPass)}
-                      style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 14 }}
+                      style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 14 }}
                     >
                       {showUplinkPass ? "🙈" : "👁"}
                     </button>
@@ -1941,7 +1950,7 @@ function WiFiScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" style={{ padding: 20 }}>
           <div
             style={{
-              background: "#161F30", borderRadius: 24, border: "1px solid #334155",
+              background: "var(--bg-card)", borderRadius: 24, border: "1px solid var(--border-color)",
               padding: 24, width: "100%", maxWidth: 420, position: "relative",
               boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.75)"
             }}
@@ -1950,8 +1959,8 @@ function WiFiScreen() {
               onClick={() => setWifiStep(0)}
               style={{
                 position: "absolute", top: 16, right: 16, width: 32, height: 32,
-                borderRadius: "50%", background: "#222F46", border: "1px solid #334155",
-                color: "#94A3B8", display: "flex", alignItems: "center", justifyContent: "center",
+                borderRadius: "50%", background: "#222F46", border: "1px solid var(--border-color)",
+                color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 16, fontWeight: 700, cursor: "pointer"
               }}
             >
@@ -1960,34 +1969,34 @@ function WiFiScreen() {
 
             <div className="flex items-center gap-2 mb-3">
               <span style={{ fontSize: 20 }}>🔍</span>
-              <span style={{ fontSize: 16, fontWeight: 700, color: "#F9FAFB" }}>
+              <span style={{ fontSize: 16, fontWeight: 700, color: "var(--text-primary)" }}>
                 Xác Nhận Cấu Hình (Lớp 1/2)
               </span>
             </div>
 
-            <p style={{ fontSize: 12, color: "#94A3B8", marginBottom: 16 }}>
+            <p style={{ fontSize: 12, color: "var(--text-muted)", marginBottom: 16 }}>
               Vui lòng kiểm tra kỹ các thông số Wi-Fi chuẩn bị áp dụng:
             </p>
 
-            <div style={{ background: "#0B0F17", borderRadius: 14, border: "1px solid #222F46", padding: 14, marginBottom: 16 }}>
+            <div style={{ background: "var(--bg-canvas)", borderRadius: 14, border: "1px solid var(--border-color)", padding: 14, marginBottom: 16 }}>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#38BDF8", marginBottom: 6 }}>📡 Băng tần 5 GHz</div>
               <div style={{ fontSize: 12, color: "#E2E8F0" }}>Tên: <strong>{ssid5}</strong></div>
               <div style={{ fontSize: 12, color: "#E2E8F0" }}>Mật khẩu: <strong>{pass5}</strong></div>
-              <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>Kênh: {ch5} · Công suất: {power5} dBm</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Kênh: {ch5} · Công suất: {power5} dBm</div>
 
               <div style={{ height: 1, background: "#222F46", margin: "10px 0" }} />
 
               <div style={{ fontSize: 12, fontWeight: 700, color: "#10B981", marginBottom: 6 }}>📶 Băng tần 2.4 GHz</div>
               <div style={{ fontSize: 12, color: "#E2E8F0" }}>Tên: <strong>{ssid24}</strong></div>
               <div style={{ fontSize: 12, color: "#E2E8F0" }}>Mật khẩu: <strong>{pass24}</strong></div>
-              <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>Kênh: {ch24} · Công suất: {power24} dBm</div>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>Kênh: {ch24} · Công suất: {power24} dBm</div>
             </div>
 
             <div className="flex gap-3">
               <button
                 onClick={() => setWifiStep(0)}
                 className="touch-btn flex-1 py-[12px] rounded-xl"
-                style={{ background: "#222F46", color: "#94A3B8", fontSize: 13, fontWeight: 600, border: "none" }}
+                style={{ background: "#222F46", color: "var(--text-muted)", fontSize: 13, fontWeight: 600, border: "none" }}
               >
                 Hủy Bỏ
               </button>
@@ -2008,7 +2017,7 @@ function WiFiScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" style={{ padding: 20 }}>
           <div
             style={{
-              background: "#161F30", borderRadius: 24, border: "1px solid #F59E0B",
+              background: "var(--bg-card)", borderRadius: 24, border: "1px solid #F59E0B",
               padding: 24, width: "100%", maxWidth: 420, position: "relative",
               boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.75)"
             }}
@@ -2017,8 +2026,8 @@ function WiFiScreen() {
               onClick={() => setWifiStep(0)}
               style={{
                 position: "absolute", top: 16, right: 16, width: 32, height: 32,
-                borderRadius: "50%", background: "#222F46", border: "1px solid #334155",
-                color: "#94A3B8", display: "flex", alignItems: "center", justifyContent: "center",
+                borderRadius: "50%", background: "#222F46", border: "1px solid var(--border-color)",
+                color: "var(--text-muted)", display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 16, fontWeight: 700, cursor: "pointer"
               }}
             >
@@ -2045,7 +2054,7 @@ function WiFiScreen() {
               <button
                 onClick={() => setWifiStep(1)}
                 className="touch-btn flex-1 py-[12px] rounded-xl"
-                style={{ background: "#222F46", color: "#94A3B8", fontSize: 13, fontWeight: 600, border: "none" }}
+                style={{ background: "#222F46", color: "var(--text-muted)", fontSize: 13, fontWeight: 600, border: "none" }}
               >
                 Quay Lại Lớp 1
               </button>
@@ -2067,12 +2076,12 @@ function WiFiScreen() {
         <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" style={{ padding: 20 }}>
           <div
             style={{
-              background: "#161F30", borderRadius: 24, border: "1px solid #3B82F6",
+              background: "var(--bg-card)", borderRadius: 24, border: "1px solid #3B82F6",
               padding: 24, width: "100%", maxWidth: 420, textAlign: "center",
               boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.75)"
             }}
           >
-            <div style={{ fontSize: 13, fontWeight: 600, color: "#94A3B8", marginBottom: 8 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-muted)", marginBottom: 8 }}>
               ĐANG ĐẾM NGƯỢC BẢO VỆ ROLLBACK
             </div>
 
@@ -2351,14 +2360,14 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
   return (
     <div className="flex flex-col gap-3 p-4 mb-nav">
       <div className="pt-1">
-        <div style={{ fontSize: 13, color: "#94A3B8", fontWeight: 500 }}>QUẢN TRỊ HỆ THỐNG</div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: "#F9FAFB" }}>Cài đặt & Phần cứng</div>
+        <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>QUẢN TRỊ HỆ THỐNG</div>
+        <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>Cài đặt & Phần cứng</div>
       </div>
 
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 16 }}>
         <div className="flex items-center gap-2 mb-4">
           <span style={{ fontSize: 18 }}>📡</span>
-          <span style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Modem 4G LTE USB</span>
+          <span style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>Modem 4G LTE USB</span>
           <span style={{
             marginLeft: "auto",
             fontSize: 10,
@@ -2377,37 +2386,37 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
           <div>
             <div className="flex justify-between mb-4">
               <div>
-                <div style={{ fontSize: 11, color: "#94A3B8" }}>Trạng thái</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Trạng thái</div>
                 <div style={{ fontSize: 14, fontWeight: 600, color: "#10B981" }}>{modem.operator}</div>
               </div>
               <div>
-                <div style={{ fontSize: 11, color: "#94A3B8" }}>Thiết bị</div>
-                <div style={{ fontSize: 14, fontWeight: 600, color: "#F9FAFB" }}>{modem.model}</div>
+                <div style={{ fontSize: 11, color: "var(--text-muted)" }}>Thiết bị</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>{modem.model}</div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 mb-2">
-              <div style={{ background: "#0B0F17", borderRadius: 12, padding: 12 }}>
-                <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4 }}>RSRP</div>
+              <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>RSRP</div>
                 <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: "#10B981" }}>{modem.rsrp} dBm</div>
               </div>
-              <div style={{ background: "#0B0F17", borderRadius: 12, padding: 12 }}>
-                <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 4 }}>SINR</div>
+              <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 4 }}>SINR</div>
                 <div className="mono" style={{ fontSize: 22, fontWeight: 700, color: "#10B981" }}>{modem.sinr} dB</div>
               </div>
             </div>
           </div>
         ) : (
-          <div style={{ background: "#0B0F17", borderRadius: 12, padding: 14, textAlign: "center" }}>
-            <div style={{ fontSize: 13, color: "#94A3B8" }}>Chưa cắm modem 4G USB vào cổng USB của router.</div>
-            <div style={{ fontSize: 11, color: "#64748B", marginTop: 4 }}>Khi cắm Dcom 4G (Huawei, ZTE), thông số sóng và nhà mạng sẽ hiển thị tại đây.</div>
+          <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 14, textAlign: "center" }}>
+            <div style={{ fontSize: 13, color: "var(--text-muted)" }}>Chưa cắm modem 4G USB vào cổng USB của router.</div>
+            <div style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 4 }}>Khi cắm Dcom 4G (Huawei, ZTE), thông số sóng và nhà mạng sẽ hiển thị tại đây.</div>
           </div>
         )}
       </div>
 
       {/* TÀI KHOẢN & BẢO MẬT HỆ THỐNG */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 16 }}>
         <div className="flex items-center justify-between mb-3">
-          <div style={{ fontSize: 11, color: "#94A3B8" }}>TÀI KHOẢN & BẢO MẬT ĐĂNG NHẬP</div>
+          <div style={{ fontSize: 11, color: "var(--text-muted)" }}>TÀI KHOẢN & BẢO MẬT ĐĂNG NHẬP</div>
           <span style={{ fontSize: 11, color: "#10B981", background: "rgba(16, 185, 129, 0.15)", padding: "2px 8px", borderRadius: 6, fontWeight: 700 }}>
             👤 {currentUser || "admin"}
           </span>
@@ -2431,19 +2440,19 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
 
         <form onSubmit={handleChangePassword} className="flex flex-col gap-2.5">
           <div>
-            <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>Mật khẩu hiện tại</div>
+            <div style={{ fontSize: 11, color: "var(--text-subtle)", marginBottom: 4 }}>Mật khẩu hiện tại</div>
             <div style={{ position: "relative" }}>
               <input
                 type={showOldPw ? "text" : "password"}
                 value={oldPass}
                 onChange={(e) => setOldPass(e.target.value)}
                 placeholder="Mật khẩu cũ..."
-                style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                style={{ width: "100%", background: "var(--bg-canvas)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
               />
               <button
                 type="button"
                 onClick={() => setShowOldPw(!showOldPw)}
-                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}
               >
                 {showOldPw ? "🙈" : "👁"}
               </button>
@@ -2451,38 +2460,38 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
-              <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>Mật khẩu mới</div>
+              <div style={{ fontSize: 11, color: "var(--text-subtle)", marginBottom: 4 }}>Mật khẩu mới</div>
               <div style={{ position: "relative" }}>
                 <input
                   type={showNewPw ? "text" : "password"}
                   value={newPass}
                   onChange={(e) => setNewPass(e.target.value)}
                   placeholder="Mật khẩu mới..."
-                  style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                  style={{ width: "100%", background: "var(--bg-canvas)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowNewPw(!showNewPw)}
-                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}
                 >
                   {showNewPw ? "🙈" : "👁"}
                 </button>
               </div>
             </div>
             <div>
-              <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>Xác nhận mật khẩu</div>
+              <div style={{ fontSize: 11, color: "var(--text-subtle)", marginBottom: 4 }}>Xác nhận mật khẩu</div>
               <div style={{ position: "relative" }}>
                 <input
                   type={showConfirmPw ? "text" : "password"}
                   value={confirmPass}
                   onChange={(e) => setConfirmPass(e.target.value)}
                   placeholder="Nhập lại mật khẩu..."
-                  style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                  style={{ width: "100%", background: "var(--bg-canvas)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPw(!showConfirmPw)}
-                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}
                 >
                   {showConfirmPw ? "🙈" : "👁"}
                 </button>
@@ -2514,11 +2523,11 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
       </div>
 
       {/* TELEGRAM BOT THÔNG BÁO & ĐỒNG BỘ 24/7 (REDESIGNED) */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 16 }}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 20 }}>🤖</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#F9FAFB" }}>Telegram Bot & Thông Báo 24/7</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>Telegram Bot & Thông Báo 24/7</span>
           </div>
           <span
             style={{
@@ -2539,7 +2548,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
           </span>
         </div>
 
-        <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: "var(--text-subtle)", marginBottom: 12 }}>
           Giám sát thiết bị theo thời gian thực, tự động mở mạng, phát hiện máy lạ và báo cáo lưu lượng qua Telegram cá nhân hoặc Nhóm chat.
         </div>
 
@@ -2561,7 +2570,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
 
         {/* TRẠNG THÁI ĐÃ KẾT NỐI (ẨN 2 Ô NHẬP NẾU ĐÃ CÓ CẤU HÌNH) */}
         {tgConfig?.has_token && tgConfig?.chat_id && !isEditingTg ? (
-          <div style={{ background: "#0B0F17", borderRadius: 12, padding: 14, border: "1px solid #1E293B" }} className="flex flex-col gap-3">
+          <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 14, border: "1px solid var(--border-color)" }} className="flex flex-col gap-3">
             <div className="flex items-center justify-between pb-2" style={{ borderBottom: "1px solid #1E293B" }}>
               <div className="flex items-center gap-2">
                 <span style={{ fontSize: 16 }}>🛡️</span>
@@ -2583,8 +2592,8 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
 
             {/* Token Hiển Thị */}
             <div className="flex items-center justify-between">
-              <span style={{ fontSize: 11, color: "#94A3B8" }}>Bot Token:</span>
-              <span className="mono" style={{ fontSize: 12, color: "#F8FAFC", background: "#161F30", padding: "2px 8px", borderRadius: 6 }}>
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Bot Token:</span>
+              <span className="mono" style={{ fontSize: 12, color: "var(--text-primary)", background: "var(--bg-card)", padding: "2px 8px", borderRadius: 6 }}>
                 🔑 {tgConfig.token_masked}
               </span>
             </div>
@@ -2592,7 +2601,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
             {/* Chat ID / Nhóm Hiển Thị */}
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span style={{ fontSize: 11, color: "#94A3B8" }}>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
                   Chat ID & Nhóm nhận tin:
                 </span>
                 <button
@@ -2605,7 +2614,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
               </div>
               <div
                 className="mono flex flex-wrap gap-1.5 p-2 rounded-lg"
-                style={{ background: "#161F30", border: "1px solid #222F46" }}
+                style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)" }}
               >
                 {tgConfig.chat_id.split(/[,\s;]+/).filter(Boolean).map((cid, idx) => {
                   const isGroup = cid.startsWith("-");
@@ -2670,7 +2679,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
           <div className="flex flex-col gap-3">
             <div>
               <div className="flex justify-between items-center mb-1">
-                <span style={{ fontSize: 11, color: "#94A3B8" }}>Bot Token (lấy từ @BotFather)</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Bot Token (lấy từ @BotFather)</span>
                 {tgConfig?.has_token && (
                   <span className="mono" style={{ fontSize: 10, color: "#10B981" }}>Đang dùng: {tgConfig.token_masked}</span>
                 )}
@@ -2683,8 +2692,8 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                   placeholder={tgConfig?.has_token ? "Để trống nếu không muốn đổi Token" : "vd: 7427895422:AAGcWzIvYYhx..."}
                   style={{
                     width: "100%",
-                    background: "#0B0F17",
-                    border: "1px solid #334155",
+                    background: "var(--bg-canvas)",
+                    border: "1px solid var(--border-color)",
                     borderRadius: 8,
                     padding: "8px 38px 8px 12px",
                     color: "#fff",
@@ -2696,7 +2705,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                 <button
                   type="button"
                   onClick={() => setShowRawToken(!showRawToken)}
-                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}
                 >
                   {showRawToken ? "🙈" : "👁"}
                 </button>
@@ -2705,7 +2714,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
 
             <div>
               <div className="flex justify-between items-center mb-1">
-                <span style={{ fontSize: 11, color: "#94A3B8" }}>Chat ID hoặc ID Nhóm (hỗ trợ nhiều ID)</span>
+                <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Chat ID hoặc ID Nhóm (hỗ trợ nhiều ID)</span>
                 <span style={{ fontSize: 10, color: "#38BDF8" }}>Phân tách bằng dấu phẩy</span>
               </div>
               <input
@@ -2715,8 +2724,8 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                 placeholder="vd: 5746523635, -1001234567890"
                 style={{
                   width: "100%",
-                  background: "#0B0F17",
-                  border: "1px solid #334155",
+                  background: "var(--bg-canvas)",
+                  border: "1px solid var(--border-color)",
                   borderRadius: 8,
                   padding: "8px 12px",
                   color: "#fff",
@@ -2725,13 +2734,13 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                   boxSizing: "border-box"
                 }}
               />
-              <div style={{ fontSize: 10, color: "#64748B", marginTop: 4 }}>
+              <div style={{ fontSize: 10, color: "var(--text-subtle)", marginTop: 4 }}>
                 💡 <i>Để gửi vào nhóm Telegram: Thêm Bot vào nhóm và nhập ID nhóm (bắt đầu bằng dấu trừ, ví dụ <code>-1002345678901</code>). Nhập nhiều ID cách nhau bằng dấu phẩy.</i>
               </div>
             </div>
 
             {/* Các tùy chọn bật tắt thông báo */}
-            <div style={{ background: "#0B0F17", borderRadius: 10, padding: "10px 12px", border: "1px solid #1E293B" }} className="flex flex-col gap-2.5">
+            <div style={{ background: "var(--bg-canvas)", borderRadius: 10, padding: "10px 12px", border: "1px solid var(--border-color)" }} className="flex flex-col gap-2.5">
               <label className="flex items-center gap-2 cursor-pointer select-none">
                 <input
                   type="checkbox"
@@ -2805,7 +2814,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                   type="button"
                   onClick={() => setIsEditingTg(false)}
                   className="touch-btn py-2 px-3 rounded-xl"
-                  style={{ background: "rgba(148, 163, 184, 0.15)", color: "#94A3B8", fontSize: 12, border: "none" }}
+                  style={{ background: "rgba(148, 163, 184, 0.15)", color: "var(--text-muted)", fontSize: 12, border: "none" }}
                 >
                   Đóng
                 </button>
@@ -2816,11 +2825,11 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
       </div>
 
       {/* KHỐI QUẢN LÝ PHIÊN BẢN & CẬP NHẬT HỆ THỐNG VCRT OS */}
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 16 }}>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
             <span style={{ fontSize: 20 }}>🚀</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#F9FAFB" }}>Phiên Bản & Cập Nhật Hệ Thống</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>Phiên Bản & Cập Nhật Hệ Thống</span>
           </div>
           <span
             className="mono"
@@ -2838,7 +2847,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
           </span>
         </div>
 
-        <div style={{ fontSize: 11, color: "#64748B", marginBottom: 12 }}>
+        <div style={{ fontSize: 11, color: "var(--text-subtle)", marginBottom: 12 }}>
           Đồng bộ và nâng cấp VCRT OS một chạm trực tiếp từ máy chủ GitHub chính thức.
         </div>
 
@@ -2898,7 +2907,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
               onClick={handleCheckUpdate}
               disabled={isCheckingUpdate}
               className="touch-btn flex-1 py-2 px-3 rounded-xl flex items-center justify-center gap-1.5"
-              style={{ background: "#222F46", color: "#F9FAFB", fontSize: 12, fontWeight: 600, border: "1px solid #334155" }}
+              style={{ background: "#222F46", color: "var(--text-primary)", fontSize: 12, fontWeight: 600, border: "1px solid var(--border-color)" }}
             >
               <span>🔍</span> {isCheckingUpdate ? "Đang kiểm tra..." : "Kiểm Tra Bản Mới"}
             </button>
@@ -2906,16 +2915,16 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
               type="button"
               onClick={() => window.open("https://github.com/lecuong2512/vcrt", "_blank")}
               className="touch-btn py-2 px-3 rounded-xl flex items-center justify-center gap-1"
-              style={{ background: "transparent", color: "#94A3B8", fontSize: 12, border: "1px solid #334155" }}
+              style={{ background: "transparent", color: "var(--text-muted)", fontSize: 12, border: "1px solid var(--border-color)" }}
             >
               <span>🔗</span> GitHub
             </button>
           </div>
 
-          <label className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer select-none" style={{ background: "#0B0F17", border: "1px solid #1E293B" }}>
+          <label className="flex items-center justify-between p-2.5 rounded-xl cursor-pointer select-none" style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-color)" }}>
             <div className="flex flex-col">
               <span style={{ fontSize: 12, fontWeight: 600, color: "#E2E8F0" }}>Tự Động Cập Nhật 24/7</span>
-              <span style={{ fontSize: 10, color: "#64748B" }}>Tự động nâng cấp khi phát hiện bản mới trên GitHub</span>
+              <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>Tự động nâng cấp khi phát hiện bản mới trên GitHub</span>
             </div>
             <input
               type="checkbox"
@@ -2934,8 +2943,8 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
         </div>
       </div>
 
-      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #222F46", padding: 16 }}>
-        <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 12 }}>BẢO TRÌ & THAO TÁC HỆ THỐNG</div>
+      <div style={{ background: "var(--bg-card)", borderRadius: 16, border: "1px solid var(--border-color)", padding: 16 }}>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 12 }}>BẢO TRÌ & THAO TÁC HỆ THỐNG</div>
         <div className="flex flex-col gap-2">
           <button
             onClick={handleCleanRam}
@@ -2947,7 +2956,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
           <button
             onClick={() => window.open("/cgi-bin/luci/admin/system/backup", "_blank")}
             className="touch-btn w-full py-[12px] rounded-xl flex items-center justify-center gap-2"
-            style={{ background: "#222F46", color: "#F9FAFB", fontSize: 13, fontWeight: 600, border: "none" }}
+            style={{ background: "#222F46", color: "var(--text-primary)", fontSize: 13, fontWeight: 600, border: "none" }}
           >
             <span>💾</span> Tải File Sao Lưu Cấu Hình (.tar.gz)
           </button>
@@ -2969,8 +2978,9 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
   );
 }
 
-// ─── Root App ─────────────────────────────────────────────────────────────────
-export default function App() {
+// ─── Root App & Shell with Theme Context ───────────────────────────────────────
+function AppContent() {
+  const { theme, toggleTheme, isDark } = useTheme();
   const [tab, setTab] = useState<Tab>("dashboard");
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [authLoading, setAuthLoading] = useState<boolean>(true);
@@ -3020,17 +3030,17 @@ export default function App() {
         style={{
           width: "100%",
           height: "100vh",
-          background: "#0B0F17",
+          background: "var(--bg-canvas)",
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
-          gap: 12
+          gap: 14
         }}
       >
-        <span className="pulse-dot" style={{ width: 24, height: 24, borderRadius: "50%", background: "#38BDF8" }} />
-        <div style={{ color: "#94A3B8", fontSize: 13, fontFamily: "JetBrains Mono, monospace" }}>
-          Đang xác thực hệ thống VCRT...
+        <span className="pulse-dot" style={{ width: 28, height: 28, borderRadius: "50%", background: "#38BDF8" }} />
+        <div style={{ color: "var(--text-muted)", fontSize: 13, fontFamily: "JetBrains Mono, monospace", fontWeight: 600 }}>
+          Đang kết nối hệ thống VCRT OS...
         </div>
       </div>
     );
@@ -3060,53 +3070,84 @@ export default function App() {
       style={{
         width: "100%",
         height: "100%",
-        background: "#0B0F17",
+        background: "var(--bg-canvas)",
+        color: "var(--text-primary)",
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
         position: "relative",
+        transition: "background-color 0.3s ease, color 0.3s ease"
       }}
     >
-      {/* Top Header Bar with User & Logout Button */}
+      {/* Top Header Bar with Glassmorphism, Theme Switcher & User Status */}
       <header
         style={{
-          background: "#0F172A",
-          borderBottom: "1px solid #1E293B",
-          padding: "8px 16px",
+          background: "var(--bg-header)",
+          borderBottom: "1px solid var(--border-color)",
+          padding: "10px 16px",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           zIndex: 40,
-          flexShrink: 0
+          flexShrink: 0,
+          backdropFilter: "blur(14px)",
+          WebkitBackdropFilter: "blur(14px)",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)"
         }}
       >
         <div className="flex items-center gap-2">
-          <VCRTLogo size={28} showText={true} />
+          <VCRTLogo size={30} showText={true} />
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {/* THEME TOGGLE BUTTON (LIGHT / DARK) */}
+          <button
+            type="button"
+            onClick={toggleTheme}
+            className="touch-btn"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: "50%",
+              background: "var(--bg-card-subtle)",
+              border: "1px solid var(--border-color)",
+              color: "var(--text-primary)",
+              cursor: "pointer",
+              fontSize: 15,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 2px 6px rgba(0, 0, 0, 0.05)"
+            }}
+            title={isDark ? "Chuyển sang Giao diện Sáng (Light)" : "Chuyển sang Giao diện Tối (Dark)"}
+          >
+            {isDark ? "☀️" : "🌙"}
+          </button>
+
           <span
             style={{
               fontSize: 11,
-              color: "#10B981",
-              background: "rgba(16, 185, 129, 0.12)",
-              padding: "2px 8px",
+              color: "var(--badge-text)",
+              background: "var(--badge-bg)",
+              border: "1px solid var(--border-color)",
+              padding: "3px 8px",
               borderRadius: 6,
-              fontWeight: 600
+              fontWeight: 700
             }}
           >
             👤 {currentUser}
           </span>
           <button
             onClick={handleLogout}
+            className="touch-btn"
             style={{
               background: "transparent",
-              border: "1px solid #334155",
+              border: "1px solid var(--border-color)",
               color: "#EF4444",
               borderRadius: 6,
-              padding: "3px 8px",
+              padding: "4px 8px",
               fontSize: 11,
-              fontWeight: 600,
+              fontWeight: 700,
               cursor: "pointer",
               display: "flex",
               alignItems: "center",
@@ -3132,5 +3173,13 @@ export default function App() {
       </div>
       <BottomNav active={tab} onSelect={setTab} />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ThemeProvider>
+      <AppContent />
+    </ThemeProvider>
   );
 }

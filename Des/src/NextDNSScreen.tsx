@@ -573,8 +573,8 @@ export default function NextDNSScreen() {
       {/* Header */}
       <div className="pt-1 flex items-center justify-between">
         <div>
-          <div style={{ fontSize: 13, color: "#94A3B8", fontWeight: 500 }}>TRUNG TÂM BẢO VỆ INTERNET</div>
-          <div style={{ fontSize: 22, fontWeight: 700, color: "#F9FAFB" }}>NextDNS Bảo Mật</div>
+          <div style={{ fontSize: 13, color: "var(--text-muted)", fontWeight: 500 }}>TRUNG TÂM BẢO VỆ INTERNET</div>
+          <div style={{ fontSize: 22, fontWeight: 700, color: "var(--text-primary)" }}>NextDNS Bảo Mật</div>
         </div>
         <div className="flex items-center gap-2">
           {hasApiKey && (
@@ -583,8 +583,8 @@ export default function NextDNSScreen() {
               disabled={loadingCloud}
               className="touch-btn"
               style={{
-                background: "#161F30",
-                border: "1px solid #222F46",
+                background: "var(--bg-card)",
+                border: "1px solid var(--border-color)",
                 borderRadius: 10,
                 padding: "8px 12px",
                 color: "#38BDF8",
@@ -599,8 +599,8 @@ export default function NextDNSScreen() {
             onClick={fetchNextDns}
             className="touch-btn"
             style={{
-              background: "#161F30",
-              border: "1px solid #222F46",
+              background: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
               borderRadius: 10,
               padding: "8px 12px",
               color: "#3B82F6",
@@ -649,10 +649,10 @@ export default function NextDNSScreen() {
               </span>
             </div>
 
-            <div style={{ background: "#0B0F17", borderRadius: 12, padding: 12, border: "1px solid #1E293B", marginBottom: 12 }}>
+            <div style={{ background: "var(--bg-canvas)", borderRadius: 12, padding: 12, border: "1px solid var(--border-color)", marginBottom: 12 }}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span style={{ fontSize: 12, color: "#64748B" }}>Profile ID:</span>
+                  <span style={{ fontSize: 12, color: "var(--text-subtle)" }}>Profile ID:</span>
                   <span style={{ fontSize: 18, fontWeight: 800, color: "#38BDF8", fontFamily: "JetBrains Mono, monospace" }}>
                     {showFullProfileId
                       ? (profileId || "")
@@ -662,7 +662,7 @@ export default function NextDNSScreen() {
                     <button
                       type="button"
                       onClick={() => setShowFullProfileId(!showFullProfileId)}
-                      style={{ background: "transparent", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                      style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}
                       title={showFullProfileId ? "Ẩn ID" : "Hiện ID đầy đủ"}
                     >
                       {showFullProfileId ? "🙈" : "👁"}
@@ -671,7 +671,7 @@ export default function NextDNSScreen() {
                 </div>
                 <button
                   onClick={() => setShowEditId(!showEditId)}
-                  style={{ background: "#1E293B", border: "none", color: "#94A3B8", fontSize: 12, padding: "5px 10px", borderRadius: 8, cursor: "pointer" }}
+                  style={{ background: "var(--bg-card-subtle)", border: "none", color: "var(--text-muted)", fontSize: 12, padding: "5px 10px", borderRadius: 8, cursor: "pointer" }}
                 >
                   {showEditId ? "Hủy" : "Đổi ID ✎"}
                 </button>
@@ -685,8 +685,8 @@ export default function NextDNSScreen() {
                     placeholder="Nhập ID mới"
                     style={{
                       flex: 1,
-                      background: "#161F30",
-                      border: "1px solid #334155",
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border-color)",
                       borderRadius: 8,
                       padding: "6px 10px",
                       color: "#10B981",
@@ -709,7 +709,7 @@ export default function NextDNSScreen() {
               {/* IP công cộng liên kết */}
               <div className="flex items-center justify-between mt-2 pt-2 border-t border-[#1E293B]">
                 <div className="flex items-center gap-1.5 flex-wrap">
-                  <span style={{ fontSize: 11, color: "#64748B" }}>IP công cộng:</span>
+                  <span style={{ fontSize: 11, color: "var(--text-subtle)" }}>IP công cộng:</span>
                   <span style={{ fontSize: 12, fontWeight: 700, color: "#10B981", fontFamily: "JetBrains Mono, monospace" }}>
                     {linkedIp || ""}
                   </span>
@@ -721,8 +721,8 @@ export default function NextDNSScreen() {
                   onClick={handleSyncIp}
                   disabled={actionLoading === "sync_ip"}
                   style={{
-                    background: "#1E293B",
-                    border: "1px solid #334155",
+                    background: "var(--bg-card-subtle)",
+                    border: "1px solid var(--border-color)",
                     color: "#38BDF8",
                     fontSize: 11,
                     padding: "4px 8px",
@@ -766,14 +766,14 @@ export default function NextDNSScreen() {
 
           {/* Modal nhập API Key nếu chưa có */}
           {showApiKeyModal && (
-            <div style={{ background: "#161F30", border: "1px solid #F59E0B", borderRadius: 16, padding: 16 }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid #F59E0B", borderRadius: 16, padding: 16 }}>
               <div className="flex items-center justify-between mb-2">
                 <span style={{ fontSize: 13, fontWeight: 700, color: "#F59E0B" }}>
                   KẾT NỐI NEXTDNS REST API
                 </span>
-                <button onClick={() => setShowApiKeyModal(false)} style={{ background: "transparent", border: "none", color: "#64748B", fontSize: 14 }}>✕</button>
+                <button onClick={() => setShowApiKeyModal(false)} style={{ background: "transparent", border: "none", color: "var(--text-subtle)", fontSize: 14 }}>✕</button>
               </div>
-              <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 8, lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 8, lineHeight: 1.5 }}>
                 Lấy mã API Key tại:{" "}
                 <a href="https://my.nextdns.io/account" target="_blank" rel="noreferrer" style={{ color: "#38BDF8", textDecoration: "underline" }}>
                   my.nextdns.io/account
@@ -787,12 +787,12 @@ export default function NextDNSScreen() {
                     value={apiKeyInput}
                     onChange={(e) => setApiKeyInput(e.target.value)}
                     placeholder="Dán API Key vào đây..."
-                    style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                    style={{ width: "100%", background: "var(--bg-canvas)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
                   />
                   <button
                     type="button"
                     onClick={() => setShowRawApiKey(!showRawApiKey)}
-                    style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                    style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 13 }}
                   >
                     {showRawApiKey ? "🙈" : "👁"}
                   </button>
@@ -815,10 +815,10 @@ export default function NextDNSScreen() {
                 style={{
                   display: "grid",
                   gridTemplateColumns: "repeat(6, 1fr)",
-                  background: "#0B0F17",
+                  background: "var(--bg-canvas)",
                   borderRadius: 12,
                   padding: 4,
-                  border: "1px solid #1E293B",
+                  border: "1px solid var(--border-color)",
                   gap: 2
                 }}
               >
@@ -861,7 +861,7 @@ export default function NextDNSScreen() {
                 <div className="flex flex-col gap-3">
                   {/* Top Bar với Bộ chọn khung thời gian chuẩn NextDNS (Image 3) */}
                   <div className="flex items-center justify-between">
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
                       TỔNG HỢP LƯU LƯỢNG TRUY VẤN
                     </div>
 
@@ -941,20 +941,20 @@ export default function NextDNSScreen() {
 
                   {/* 3 Thẻ số liệu chính */}
                   <div className="grid grid-cols-3 gap-2">
-                    <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
-                      <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>QUERIES</div>
-                      <div style={{ fontSize: 20, fontWeight: 800, color: "#F9FAFB", fontFamily: "JetBrains Mono, monospace" }}>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>QUERIES</div>
+                      <div style={{ fontSize: 20, fontWeight: 800, color: "var(--text-primary)", fontFamily: "JetBrains Mono, monospace" }}>
                         {totalQueries > 0 ? totalQueries.toLocaleString() : (loadingCloud ? "..." : "0")}
                       </div>
                     </div>
-                    <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
-                      <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>BLOCKED QUERIES</div>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>BLOCKED QUERIES</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: "#EF4444", fontFamily: "JetBrains Mono, monospace" }}>
                         {blockedQueries > 0 ? blockedQueries.toLocaleString() : (loadingCloud ? "..." : "0")}
                       </div>
                     </div>
-                    <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
-                      <div style={{ fontSize: 10, color: "#94A3B8", marginBottom: 2 }}>% BLOCKED</div>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: "12px 10px", textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: "var(--text-muted)", marginBottom: 2 }}>% BLOCKED</div>
                       <div style={{ fontSize: 20, fontWeight: 800, color: "#10B981", fontFamily: "JetBrains Mono, monospace" }}>
                         {blockRate}%
                       </div>
@@ -962,22 +962,22 @@ export default function NextDNSScreen() {
                   </div>
 
                   {/* Thanh tiến trình tỷ lệ chặn */}
-                  <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
                     <div className="flex items-center justify-between mb-2">
-                      <span style={{ fontSize: 12, color: "#94A3B8" }}>Lưu lượng độc hại & quảng cáo đã lọc ({currentTimeLabel})</span>
+                      <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Lưu lượng độc hại & quảng cáo đã lọc ({currentTimeLabel})</span>
                       <span style={{ fontSize: 12, fontWeight: 700, color: "#10B981" }}>{blockRate}%</span>
                     </div>
-                    <div style={{ width: "100%", height: 8, background: "#0B0F17", borderRadius: 4, overflow: "hidden" }}>
+                    <div style={{ width: "100%", height: 8, background: "var(--bg-canvas)", borderRadius: 4, overflow: "hidden" }}>
                       <div style={{ width: `${Math.min(100, Math.max(0, parseFloat(blockRate)))}%`, height: "100%", background: "#10B981", borderRadius: 4, transition: "width 0.4s ease" }} />
                     </div>
                   </div>
 
 {/* ────────────────── REASONS: LÝ DO BỊ CHẶN (TOP BLOCK REASONS) ────────────────── */}
-                  <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
                     <div className="flex items-center justify-between mb-3">
                       <div>
-                        <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Lý Do Bị Chặn (Reasons)</div>
-                        <div style={{ fontSize: 10, color: "#64748B" }}>Bộ lọc, danh sách hoặc dịch vụ đã chặn truy vấn</div>
+                        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>Lý Do Bị Chặn (Reasons)</div>
+                        <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>Bộ lọc, danh sách hoặc dịch vụ đã chặn truy vấn</div>
                       </div>
                       <span style={{ fontSize: 11, color: "#EF4444", background: "rgba(239, 68, 68, 0.1)", padding: "2px 8px", borderRadius: 6, fontWeight: 700 }}>
                         {reasons.length} nguồn chặn
@@ -985,7 +985,7 @@ export default function NextDNSScreen() {
                     </div>
 
                     {reasons.length === 0 ? (
-                      <div style={{ fontSize: 11, color: "#64748B", padding: "12px 0", textAlign: "center" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-subtle)", padding: "12px 0", textAlign: "center" }}>
                         Chưa có lý do chặn nào được ghi nhận trong khoảng thời gian này
                       </div>
                     ) : (
@@ -995,12 +995,12 @@ export default function NextDNSScreen() {
                           const rPct = blockedQueries > 0 ? Math.min(100, Math.round((rQueries / blockedQueries) * 100)) : 0;
                           const isCustom = r.id === "denylist" || r.id.startsWith("service:");
                           return (
-                            <div key={idx} style={{ background: "#0B0F17", border: "1px solid #1E293B", borderRadius: 10, padding: "10px 12px" }}>
+                            <div key={idx} style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "10px 12px" }}>
                               <div className="flex items-center justify-between mb-1.5">
                                 <div className="flex items-center gap-2">
                                   <span style={{ fontSize: 12 }}>{isCustom ? "🔒" : "🛡️"}</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: "#F9FAFB" }}>{r.name || r.id}</span>
-                                  <span style={{ fontSize: 10, color: "#94A3B8", background: "#1E293B", padding: "1px 6px", borderRadius: 4 }}>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>{r.name || r.id}</span>
+                                  <span style={{ fontSize: 10, color: "var(--text-muted)", background: "var(--bg-card-subtle)", padding: "1px 6px", borderRadius: 4 }}>
                                     {r.id.startsWith("service:") ? "Dịch vụ" : r.id === "denylist" ? "Denylist thủ công" : "Bộ lọc cộng đồng"}
                                   </span>
                                 </div>
@@ -1008,10 +1008,10 @@ export default function NextDNSScreen() {
                                   <span style={{ fontSize: 12, fontWeight: 800, color: "#EF4444", fontFamily: "JetBrains Mono, monospace" }}>
                                     {rQueries.toLocaleString()}
                                   </span>
-                                  <span style={{ fontSize: 10, color: "#64748B" }}>({rPct}%)</span>
+                                  <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>({rPct}%)</span>
                                 </div>
                               </div>
-                              <div style={{ width: "100%", height: 5, background: "#1E293B", borderRadius: 3, overflow: "hidden" }}>
+                              <div style={{ width: "100%", height: 5, background: "var(--bg-card-subtle)", borderRadius: 3, overflow: "hidden" }}>
                                 <div style={{ width: `${rPct}%`, height: "100%", background: isCustom ? "#F59E0B" : "#EF4444", borderRadius: 3 }} />
                               </div>
                             </div>
@@ -1024,11 +1024,11 @@ export default function NextDNSScreen() {
                   {/* ────────────────── GIAO THỨC & BẢO MẬT DNSSEC ────────────────── */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* DNS Protocols */}
-                    <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Giao Thức DNS (Protocols)</div>
-                          <div style={{ fontSize: 10, color: "#64748B" }}>Phương thức truyền tải truy vấn</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>Giao Thức DNS (Protocols)</div>
+                          <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>Phương thức truyền tải truy vấn</div>
                         </div>
                         <span style={{ fontSize: 11, color: "#38BDF8", background: "rgba(56, 189, 248, 0.1)", padding: "2px 6px", borderRadius: 6 }}>
                           IPv4 & Native
@@ -1036,22 +1036,22 @@ export default function NextDNSScreen() {
                       </div>
                       <div className="flex flex-col gap-2">
                         {protocols.length === 0 ? (
-                          <div style={{ fontSize: 11, color: "#64748B", padding: "8px 0", textAlign: "center" }}>Đang tải...</div>
+                          <div style={{ fontSize: 11, color: "var(--text-subtle)", padding: "8px 0", textAlign: "center" }}>Đang tải...</div>
                         ) : (
                           protocols.map((p, idx) => {
                             const pTotal = protocols.reduce((sum, item) => sum + (item.queries || 0), 0) || 1;
                             const pPct = Math.round(((p.queries || 0) / pTotal) * 100);
                             return (
-                              <div key={idx} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "#0B0F17", border: "1px solid #1E293B" }}>
+                              <div key={idx} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-color)" }}>
                                 <div className="flex items-center gap-2">
                                   <span style={{ fontSize: 12, color: "#38BDF8" }}>⚡</span>
-                                  <span style={{ fontSize: 12, fontWeight: 700, color: "#F9FAFB" }}>{p.protocol}</span>
+                                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)" }}>{p.protocol}</span>
                                 </div>
                                 <div className="flex items-center gap-2">
                                   <span style={{ fontSize: 11, fontWeight: 700, color: "#38BDF8", fontFamily: "JetBrains Mono, monospace" }}>
                                     {p.queries.toLocaleString()} truy vấn
                                   </span>
-                                  <span style={{ fontSize: 10, color: "#64748B" }}>({pPct}%)</span>
+                                  <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>({pPct}%)</span>
                                 </div>
                               </div>
                             );
@@ -1061,11 +1061,11 @@ export default function NextDNSScreen() {
                     </div>
 
                     {/* DNSSEC Validation */}
-                    <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Xác Thực DNSSEC</div>
-                          <div style={{ fontSize: 10, color: "#64748B" }}>Chống giả mạo bản ghi DNS độc hại</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>Xác Thực DNSSEC</div>
+                          <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>Chống giả mạo bản ghi DNS độc hại</div>
                         </div>
                         <span style={{ fontSize: 11, color: "#10B981", background: "rgba(16, 185, 129, 0.1)", padding: "2px 6px", borderRadius: 6 }}>
                           Bảo vệ tự động
@@ -1073,10 +1073,10 @@ export default function NextDNSScreen() {
                       </div>
                       <div className="flex flex-col gap-2">
                         {dnssec.length === 0 ? (
-                          <div style={{ fontSize: 11, color: "#64748B", padding: "8px 0", textAlign: "center" }}>Đang tải...</div>
+                          <div style={{ fontSize: 11, color: "var(--text-subtle)", padding: "8px 0", textAlign: "center" }}>Đang tải...</div>
                         ) : (
                           dnssec.map((s, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "#0B0F17", border: "1px solid #1E293B" }}>
+                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-color)" }}>
                               <div className="flex items-center gap-2">
                                 <span style={{ fontSize: 12 }}>{s.validated ? "🔒" : "🌐"}</span>
                                 <span style={{ fontSize: 12, fontWeight: 700, color: s.validated ? "#10B981" : "#94A3B8" }}>
@@ -1095,11 +1095,11 @@ export default function NextDNSScreen() {
 
                   {/* ────────────────── 2 BẢNG: RESOLVED & BLOCKED DOMAINS (CÓ CHUYỂN TÊN MIỀN GỐC) ────────────────── */}
                   <div className="flex items-center justify-between mt-1">
-                    <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
                       CHI TIẾT TÊN MIỀN PHÂN GIẢI & BỊ CHẶN
                     </div>
                     {/* Toggle: Tất cả tên miền vs Tên miền gốc (Root) */}
-                    <div style={{ display: "flex", gap: 4, background: "#0B0F17", padding: 3, borderRadius: 8, border: "1px solid #1E293B" }}>
+                    <div style={{ display: "flex", gap: 4, background: "var(--bg-canvas)", padding: 3, borderRadius: 8, border: "1px solid var(--border-color)" }}>
                       <button
                         onClick={() => {
                           setIsRootDomains(false);
@@ -1141,11 +1141,11 @@ export default function NextDNSScreen() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                     {/* Resolved Domains */}
-                    <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
                       <div className="flex items-center justify-between mb-3">
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Resolved Domains</div>
-                          <div style={{ fontSize: 10, color: "#64748B" }}>Tên miền đã phân giải thành công</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>Resolved Domains</div>
+                          <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>Tên miền đã phân giải thành công</div>
                         </div>
                         <span style={{ fontSize: 11, color: "#38BDF8", background: "rgba(56, 189, 248, 0.1)", padding: "2px 6px", borderRadius: 6 }}>
                           Top {(showAllDomains ? resolvedDomains : resolvedDomains.slice(0, 8)).length} / {resolvedDomains.length}
@@ -1153,12 +1153,12 @@ export default function NextDNSScreen() {
                       </div>
                       <div className="flex flex-col gap-1.5">
                         {resolvedDomains.length === 0 ? (
-                          <div style={{ fontSize: 11, color: "#64748B", padding: "12px 0", textAlign: "center" }}>
+                          <div style={{ fontSize: 11, color: "var(--text-subtle)", padding: "12px 0", textAlign: "center" }}>
                             {loadingCloud ? "Đang tải dữ liệu..." : "Chưa có dữ liệu trong khoảng thời gian này"}
                           </div>
                         ) : (
                           (showAllDomains ? resolvedDomains : resolvedDomains.slice(0, 8)).map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "#0B0F17", border: "1px solid #1E293B" }}>
+                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-color)" }}>
                               <div className="flex items-center gap-2 overflow-hidden mr-2">
                                 <img
                                   src={`https://www.google.com/s2/favicons?domain=${item.domain}&sz=32`}
@@ -1166,7 +1166,7 @@ export default function NextDNSScreen() {
                                   style={{ width: 16, height: 16, borderRadius: 3, flexShrink: 0 }}
                                   onError={(e) => { (e.currentTarget as HTMLElement).style.display = "none"; }}
                                 />
-                                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", color: "#F9FAFB", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.domain}>
+                                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.domain}>
                                   {item.domain}
                                 </span>
                                 {item.tracker && (
@@ -1175,7 +1175,7 @@ export default function NextDNSScreen() {
                                   </span>
                                 )}
                               </div>
-                              <span style={{ fontSize: 11, fontWeight: 700, color: "#94A3B8", background: "#1E293B", padding: "2px 8px", borderRadius: 6, flexShrink: 0 }}>
+                              <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", background: "var(--bg-card-subtle)", padding: "2px 8px", borderRadius: 6, flexShrink: 0 }}>
                                 {item.queries.toLocaleString()}
                               </span>
                             </div>
@@ -1185,11 +1185,11 @@ export default function NextDNSScreen() {
                     </div>
 
                     {/* Blocked Domains */}
-                    <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
+                    <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
                       <div className="flex items-center justify-between mb-3">
                         <div>
                           <div style={{ fontSize: 13, fontWeight: 700, color: "#EF4444" }}>Blocked Domains</div>
-                          <div style={{ fontSize: 10, color: "#64748B" }}>Tên miền quảng cáo/mã độc đã chặn</div>
+                          <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>Tên miền quảng cáo/mã độc đã chặn</div>
                         </div>
                         <span style={{ fontSize: 11, color: "#EF4444", background: "rgba(239, 68, 68, 0.1)", padding: "2px 6px", borderRadius: 6 }}>
                           Top {(showAllDomains ? blockedDomains : blockedDomains.slice(0, 8)).length} / {blockedDomains.length}
@@ -1197,15 +1197,15 @@ export default function NextDNSScreen() {
                       </div>
                       <div className="flex flex-col gap-1.5">
                         {blockedDomains.length === 0 ? (
-                          <div style={{ fontSize: 11, color: "#64748B", padding: "12px 0", textAlign: "center" }}>
+                          <div style={{ fontSize: 11, color: "var(--text-subtle)", padding: "12px 0", textAlign: "center" }}>
                             {loadingCloud ? "Đang tải dữ liệu..." : "Chưa có tên miền nào bị chặn trong khoảng thời gian này"}
                           </div>
                         ) : (
                           (showAllDomains ? blockedDomains : blockedDomains.slice(0, 8)).map((item, idx) => (
-                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "#0B0F17", border: "1px solid #1E293B", borderLeft: "3px solid #EF4444" }}>
+                            <div key={idx} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-color)", borderLeft: "3px solid #EF4444" }}>
                               <div className="flex items-center gap-2 overflow-hidden mr-2">
                                 <span style={{ fontSize: 12, color: "#EF4444" }}>🚫</span>
-                                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", color: "#F9FAFB", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.domain}>
+                                <span style={{ fontSize: 11, fontFamily: "JetBrains Mono, monospace", color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={item.domain}>
                                   {item.domain}
                                 </span>
                                 {item.tracker && (
@@ -1229,8 +1229,8 @@ export default function NextDNSScreen() {
                     <button
                       onClick={() => setShowAllDomains(!showAllDomains)}
                       style={{
-                        background: "#161F30",
-                        border: "1px solid #222F46",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
                         color: "#38BDF8",
                         padding: "8px 14px",
                         borderRadius: 10,
@@ -1261,11 +1261,11 @@ export default function NextDNSScreen() {
                         onChange={(e) => setLogDevice(e.target.value)}
                         style={{
                           width: "100%",
-                          background: "#161F30",
-                          border: "1px solid #334155",
+                          background: "var(--bg-card)",
+                          border: "1px solid var(--border-color)",
                           borderRadius: 10,
                           padding: "8px 12px",
-                          color: "#F9FAFB",
+                          color: "var(--text-primary)",
                           fontSize: 12,
                           fontWeight: 600,
                           cursor: "pointer",
@@ -1286,13 +1286,13 @@ export default function NextDNSScreen() {
                         display: "flex",
                         alignItems: "center",
                         gap: 8,
-                        background: "#161F30",
-                        border: "1px solid #334155",
+                        background: "var(--bg-card)",
+                        border: "1px solid var(--border-color)",
                         borderRadius: 10,
                         padding: "6px 12px"
                       }}
                     >
-                      <span style={{ color: "#64748B", fontSize: 13 }}>🔍</span>
+                      <span style={{ color: "var(--text-subtle)", fontSize: 13 }}>🔍</span>
                       <input
                         type="text"
                         value={logSearch}
@@ -1302,7 +1302,7 @@ export default function NextDNSScreen() {
                           flex: 1,
                           background: "transparent",
                           border: "none",
-                          color: "#F9FAFB",
+                          color: "var(--text-primary)",
                           fontSize: 13,
                           outline: "none"
                         }}
@@ -1310,7 +1310,7 @@ export default function NextDNSScreen() {
                       {logSearch && (
                         <button
                           onClick={() => setLogSearch("")}
-                          style={{ background: "transparent", border: "none", color: "#64748B", cursor: "pointer" }}
+                          style={{ background: "transparent", border: "none", color: "var(--text-subtle)", cursor: "pointer" }}
                         >
                           ✕
                         </button>
@@ -1340,7 +1340,7 @@ export default function NextDNSScreen() {
                         disabled={fetchingLogs}
                         title="Làm mới ngay"
                         style={{
-                          background: "#1E293B",
+                          background: "var(--bg-card-subtle)",
                           border: "none",
                           color: fetchingLogs ? "#38BDF8" : "#94A3B8",
                           borderRadius: 6,
@@ -1357,8 +1357,8 @@ export default function NextDNSScreen() {
                   {/* Real Logs Feed matching Image 1 */}
                   <div
                     style={{
-                      background: "#161F30",
-                      border: "1px solid #222F46",
+                      background: "var(--bg-card)",
+                      border: "1px solid var(--border-color)",
                       borderRadius: 14,
                       overflow: "hidden",
                       display: "flex",
@@ -1373,19 +1373,19 @@ export default function NextDNSScreen() {
                         alignItems: "center",
                         justifyContent: "space-between",
                         fontSize: 11,
-                        color: "#94A3B8"
+                        color: "var(--text-muted)"
                       }}
                     >
                       <div className="flex items-center gap-2">
                         <span className="pulse-dot" style={{ width: 8, height: 8, borderRadius: "50%", background: "#10B981" }} />
                         <span>Live Stream Logs ({filteredLogs.length} queries)</span>
                       </div>
-                      <span style={{ fontSize: 10, color: "#64748B" }}>Tự động làm mới mỗi 3.5s</span>
+                      <span style={{ fontSize: 10, color: "var(--text-subtle)" }}>Tự động làm mới mỗi 3.5s</span>
                     </div>
 
                     <div style={{ maxHeight: "580px", overflowY: "auto" }}>
                       {filteredLogs.length === 0 ? (
-                        <div style={{ padding: "40px 20px", textAlign: "center", color: "#64748B", fontSize: 12 }}>
+                        <div style={{ padding: "40px 20px", textAlign: "center", color: "var(--text-subtle)", fontSize: 12 }}>
                           {fetchingLogs ? "Đang tải dữ liệu truy vấn thời gian thực..." : "Không có truy vấn nào phù hợp bộ lọc"}
                         </div>
                       ) : (
@@ -1451,10 +1451,10 @@ export default function NextDNSScreen() {
                               {/* Right: Client IP, Relative Time & Action Menu (Image 1) */}
                               <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0, position: "relative" }}>
                                 <div style={{ textAlign: "right" }}>
-                                  <div style={{ fontSize: 11, fontWeight: 600, color: "#94A3B8", fontFamily: "JetBrains Mono, monospace" }}>
+                                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-muted)", fontFamily: "JetBrains Mono, monospace" }}>
                                     {log.clientIp || linkedIp}
                                   </div>
-                                  <div style={{ fontSize: 10, color: "#64748B" }}>
+                                  <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>
                                     {formatTimeAgo(log.timestamp)}
                                   </div>
                                 </div>
@@ -1465,7 +1465,7 @@ export default function NextDNSScreen() {
                                   style={{
                                     background: "transparent",
                                     border: "none",
-                                    color: "#64748B",
+                                    color: "var(--text-subtle)",
                                     fontSize: 16,
                                     cursor: "pointer",
                                     padding: "4px 6px"
@@ -1483,8 +1483,8 @@ export default function NextDNSScreen() {
                                       top: "100%",
                                       right: 0,
                                       zIndex: 100,
-                                      background: "#0B0F17",
-                                      border: "1px solid #334155",
+                                      background: "var(--bg-canvas)",
+                                      border: "1px solid var(--border-color)",
                                       borderRadius: 8,
                                       boxShadow: "0 10px 20px rgba(0,0,0,0.5)",
                                       minWidth: "160px",
@@ -1547,10 +1547,10 @@ export default function NextDNSScreen() {
                 <div className="flex flex-col gap-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>
+                      <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>
                         BỘ LỌC QUẢNG CÁO & THEO DÕI (BLOCKLISTS)
                       </div>
-                      <div style={{ fontSize: 11, color: "#64748B" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-subtle)" }}>
                         Các bộ lọc cộng đồng toàn cầu được kích hoạt trên hồ sơ NextDNS
                       </div>
                     </div>
@@ -1577,9 +1577,9 @@ export default function NextDNSScreen() {
                   </div>
 
                   {/* Danh sách các bộ lọc đang kích hoạt */}
-                  <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, overflow: "hidden" }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, overflow: "hidden" }}>
                     {activeBlocklists.length === 0 ? (
-                      <div style={{ padding: "36px 20px", textAlign: "center", color: "#64748B", fontSize: 12 }}>
+                      <div style={{ padding: "36px 20px", textAlign: "center", color: "var(--text-subtle)", fontSize: 12 }}>
                         Chưa có bộ lọc nào được thêm. Nhấn "Add a blocklist" để kích hoạt!
                       </div>
                     ) : (
@@ -1601,15 +1601,15 @@ export default function NextDNSScreen() {
                             }}
                           >
                             <div style={{ flex: 1 }}>
-                              <div style={{ fontSize: 14, fontWeight: 700, color: "#F9FAFB", marginBottom: 4 }}>
+                              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
                                 {name}
                               </div>
                               {desc && (
-                                <div style={{ fontSize: 12, color: "#94A3B8", lineHeight: 1.45, marginBottom: 6 }}>
+                                <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.45, marginBottom: 6 }}>
                                   {desc}
                                 </div>
                               )}
-                              <div style={{ fontSize: 11, color: "#64748B", display: "flex", alignItems: "center", gap: 8 }}>
+                              <div style={{ fontSize: 11, color: "var(--text-subtle)", display: "flex", alignItems: "center", gap: 8 }}>
                                 <span>{(b.entries || 80788).toLocaleString()} entries</span>
                                 {b.updatedOn && <span>• Updated {formatTimeAgo(b.updatedOn)}</span>}
                               </div>
@@ -1647,13 +1647,13 @@ export default function NextDNSScreen() {
               {activeSubTab === "parental" && (
                 <div className="flex flex-col gap-3">
                   {/* SafeSearch & YouTube Restricted */}
-                  <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#F9FAFB", marginBottom: 10 }}>TÌM KIẾM & NỘI DUNG AN TOÀN</div>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 10 }}>TÌM KIẾM & NỘI DUNG AN TOÀN</div>
                     <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between p-2 rounded-xl" style={{ background: "#0B0F17" }}>
+                      <div className="flex items-center justify-between p-2 rounded-xl" style={{ background: "var(--bg-canvas)" }}>
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>🔍 SafeSearch</div>
-                          <div style={{ fontSize: 11, color: "#64748B" }}>Lọc kết quả nhạy cảm trên Google, Bing, DuckDuckGo</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>🔍 SafeSearch</div>
+                          <div style={{ fontSize: 11, color: "var(--text-subtle)" }}>Lọc kết quả nhạy cảm trên Google, Bing, DuckDuckGo</div>
                         </div>
                         <button
                           onClick={() => handleToggleParentalFlag("safeSearch", !!profileData?.parentalControl?.safeSearch)}
@@ -1667,10 +1667,10 @@ export default function NextDNSScreen() {
                         </button>
                       </div>
 
-                      <div className="flex items-center justify-between p-2 rounded-xl" style={{ background: "#0B0F17" }}>
+                      <div className="flex items-center justify-between p-2 rounded-xl" style={{ background: "var(--bg-canvas)" }}>
                         <div>
-                          <div style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>🔞 YouTube Restricted Mode</div>
-                          <div style={{ fontSize: 11, color: "#64748B" }}>Ẩn video người lớn và nhạy cảm trên YouTube</div>
+                          <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-primary)" }}>🔞 YouTube Restricted Mode</div>
+                          <div style={{ fontSize: 11, color: "var(--text-subtle)" }}>Ẩn video người lớn và nhạy cảm trên YouTube</div>
                         </div>
                         <button
                           onClick={() => handleToggleParentalFlag("youtubeRestrictedMode", !!profileData?.parentalControl?.youtubeRestrictedMode)}
@@ -1687,18 +1687,18 @@ export default function NextDNSScreen() {
                   </div>
 
                   {/* Chặn danh mục */}
-                  <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#F9FAFB", marginBottom: 10 }}>CHẶN THEO DANH MỤC</div>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 10 }}>CHẶN THEO DANH MỤC</div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                       {CATEGORIES.map((c) => {
                         const isCatBlocked = (profileData?.parentalControl?.categories || []).some((item: any) => item.id === c.id && item.active);
                         return (
-                          <div key={c.id} className="flex items-center justify-between p-2.5 rounded-xl" style={{ background: "#0B0F17", border: isCatBlocked ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #1E293B" }}>
+                          <div key={c.id} className="flex items-center justify-between p-2.5 rounded-xl" style={{ background: "var(--bg-canvas)", border: isCatBlocked ? "1px solid rgba(239, 68, 68, 0.4)" : "1px solid #1E293B" }}>
                             <div className="flex items-center gap-2">
                               <span style={{ fontSize: 16 }}>{c.icon}</span>
                               <div>
                                 <div style={{ fontSize: 12, fontWeight: 700, color: isCatBlocked ? "#EF4444" : "#F9FAFB" }}>{c.name}</div>
-                                <div style={{ fontSize: 10, color: "#64748B" }}>{c.desc}</div>
+                                <div style={{ fontSize: 10, color: "var(--text-subtle)" }}>{c.desc}</div>
                               </div>
                             </div>
                             <button
@@ -1718,8 +1718,8 @@ export default function NextDNSScreen() {
                   </div>
 
                   {/* Chặn ứng dụng phổ biến */}
-                  <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 14 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#F9FAFB", marginBottom: 10 }}>CHẶN ỨNG DỤNG 1 CHẠM</div>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 14 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 10 }}>CHẶN ỨNG DỤNG 1 CHẠM</div>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                       {POPULAR_SERVICES.map((s) => {
                         const isAppBlocked = (profileData?.parentalControl?.services || []).some((item: any) => item.id === s.id && item.active);
@@ -1756,12 +1756,12 @@ export default function NextDNSScreen() {
                   {SECURITY_FEATURES.map((sec) => {
                     const isSecActive = !!profileData?.security?.[sec.key];
                     return (
-                      <div key={sec.key} className="flex items-start justify-between p-3 rounded-xl" style={{ background: "#161F30", border: isSecActive ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid #222F46" }}>
+                      <div key={sec.key} className="flex items-start justify-between p-3 rounded-xl" style={{ background: "var(--bg-card)", border: isSecActive ? "1px solid rgba(16, 185, 129, 0.4)" : "1px solid #222F46" }}>
                         <div className="flex items-start gap-2.5 flex-1">
                           <span style={{ fontSize: 20 }}>{sec.icon}</span>
                           <div>
                             <div style={{ fontSize: 13, fontWeight: 700, color: isSecActive ? "#10B981" : "#F9FAFB" }}>{sec.name}</div>
-                            <div style={{ fontSize: 11, color: "#64748B", marginTop: 2 }}>{sec.desc}</div>
+                            <div style={{ fontSize: 11, color: "var(--text-subtle)", marginTop: 2 }}>{sec.desc}</div>
                           </div>
                         </div>
                         <button
@@ -1785,7 +1785,7 @@ export default function NextDNSScreen() {
               ────────────────────────────────────────────────────────────── */}
               {activeSubTab === "lists" && (
                 <div className="flex flex-col gap-3">
-                  <div style={{ display: "flex", gap: 8, background: "#0B0F17", padding: 4, borderRadius: 10, border: "1px solid #1E293B" }}>
+                  <div style={{ display: "flex", gap: 8, background: "var(--bg-canvas)", padding: 4, borderRadius: 10, border: "1px solid var(--border-color)" }}>
                     <button
                       onClick={() => setListType("denylist")}
                       style={{
@@ -1808,8 +1808,8 @@ export default function NextDNSScreen() {
                     </button>
                   </div>
 
-                  <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 12 }}>
-                    <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 6 }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 12 }}>
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 6 }}>
                       Thêm tên miền vào {listType === "denylist" ? "danh sách CHẶN" : "danh sách CHO PHÉP"}
                     </div>
                     <div style={{ display: "flex", gap: 8 }}>
@@ -1817,7 +1817,7 @@ export default function NextDNSScreen() {
                         value={newDomainInput}
                         onChange={(e) => setNewDomainInput(e.target.value)}
                         placeholder="Ví dụ: shopee.vn hoặc *.ads.com"
-                        style={{ flex: 1, background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#fff", fontSize: 13, outline: "none" }}
+                        style={{ flex: 1, background: "var(--bg-canvas)", border: "1px solid var(--border-color)", borderRadius: 8, padding: "8px 12px", color: "#fff", fontSize: 13, outline: "none" }}
                       />
                       <button
                         onClick={() => handleAddDomain()}
@@ -1832,19 +1832,19 @@ export default function NextDNSScreen() {
                     </div>
                   </div>
 
-                  <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 14, padding: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#F9FAFB", marginBottom: 8 }}>
+                  <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 14, padding: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-primary)", marginBottom: 8 }}>
                       {listType === "denylist" ? "TÊN MIỀN ĐANG BỊ CHẶN" : "TÊN MIỀN ĐANG ĐƯỢC PHÉP"}
                     </div>
                     {(listType === "denylist" ? denylist : allowlist).length === 0 ? (
-                      <div style={{ fontSize: 11, color: "#64748B", textAlign: "center", padding: "16px 0" }}>
+                      <div style={{ fontSize: 11, color: "var(--text-subtle)", textAlign: "center", padding: "16px 0" }}>
                         Chưa có tên miền nào trong danh sách
                       </div>
                     ) : (
                       <div className="flex flex-col gap-1.5 max-h-60 overflow-y-auto pr-1">
                         {(listType === "denylist" ? denylist : allowlist).map((item) => (
-                          <div key={item.id} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "#0B0F17", border: "1px solid #1E293B" }}>
-                            <span style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: "#F9FAFB" }}>
+                          <div key={item.id} className="flex items-center justify-between p-2 rounded-lg" style={{ background: "var(--bg-canvas)", border: "1px solid var(--border-color)" }}>
+                            <span style={{ fontSize: 12, fontFamily: "JetBrains Mono, monospace", color: "var(--text-primary)" }}>
                               {item.id}
                             </span>
                             <button
@@ -1864,12 +1864,12 @@ export default function NextDNSScreen() {
               )}
             </div>
           ) : (
-            <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 16, padding: 16, textAlign: "center" }}>
+            <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 16, padding: 16, textAlign: "center" }}>
               <div style={{ fontSize: 28, marginBottom: 6 }}>🚀</div>
-              <div style={{ fontSize: 14, fontWeight: 700, color: "#F9FAFB", marginBottom: 4 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 4 }}>
                 Mở Khóa Bảng Quản Trị Trực Tiếp
               </div>
-              <div style={{ fontSize: 11, color: "#94A3B8", maxWidth: 360, margin: "0 auto 12px auto", lineHeight: 1.5 }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", maxWidth: 360, margin: "0 auto 12px auto", lineHeight: 1.5 }}>
                 Nhập API Key để xem thống kê truy vấn thời gian thực, bật/tắt chặn TikTok, Facebook, Game, Web người lớn ngay trên router!
               </div>
               <button
@@ -1887,14 +1887,14 @@ export default function NextDNSScreen() {
             <button
               onClick={() => window.open(`https://my.nextdns.io/${profileId || ""}`, "_blank")}
               className="touch-btn flex items-center justify-center gap-1.5"
-              style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 12, padding: "10px", color: "#94A3B8", fontSize: 11, fontWeight: 600 }}
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 12, padding: "10px", color: "var(--text-muted)", fontSize: 11, fontWeight: 600 }}
             >
               <span>🔗</span> my.nextdns.io
             </button>
             <button
               onClick={() => window.open("https://test.nextdns.io", "_blank")}
               className="touch-btn flex items-center justify-center gap-1.5"
-              style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 12, padding: "10px", color: "#38BDF8", fontSize: 11, fontWeight: 600 }}
+              style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 12, padding: "10px", color: "#38BDF8", fontSize: 11, fontWeight: 600 }}
             >
               <span>🔍</span> test.nextdns.io
             </button>
@@ -1912,11 +1912,11 @@ export default function NextDNSScreen() {
       ) : (
         /* KHI CHƯA BẬT NEXTDNS */
         <div className="flex flex-col gap-3">
-          <div style={{ background: "#161F30", border: "1px solid #222F46", borderRadius: 16, padding: 16 }}>
-            <div style={{ fontSize: 14, fontWeight: 700, color: "#F9FAFB", marginBottom: 6 }}>
+          <div style={{ background: "var(--bg-card)", border: "1px solid var(--border-color)", borderRadius: 16, padding: 16 }}>
+            <div style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginBottom: 6 }}>
               Kích hoạt NextDNS bảo vệ toàn diện
             </div>
-            <div style={{ fontSize: 12, color: "#94A3B8", lineHeight: 1.5, marginBottom: 12 }}>
+            <div style={{ fontSize: 12, color: "var(--text-muted)", lineHeight: 1.5, marginBottom: 12 }}>
               Định tuyến toàn bộ truy vấn DNS qua máy chủ bảo mật của NextDNS, tự động lọc quảng cáo, mã độc và các nội dung nguy hiểm cho tất cả thiết bị kết nối router.
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -1924,7 +1924,7 @@ export default function NextDNSScreen() {
                 value={profileId}
                 onChange={(e) => setProfileId(e.target.value)}
                 placeholder="Nhập 6 ký tự Profile ID (vd: abc123)"
-                style={{ flex: 1, background: "#0B0F17", border: "1px solid #334155", borderRadius: 10, padding: "10px 14px", color: "#fff", fontSize: 14, outline: "none", fontFamily: "JetBrains Mono, monospace" }}
+                style={{ flex: 1, background: "var(--bg-canvas)", border: "1px solid var(--border-color)", borderRadius: 10, padding: "10px 14px", color: "#fff", fontSize: 14, outline: "none", fontFamily: "JetBrains Mono, monospace" }}
               />
               <button
                 onClick={handleSaveProfile}

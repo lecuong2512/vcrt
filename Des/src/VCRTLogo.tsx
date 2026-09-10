@@ -82,7 +82,7 @@ export function VCRTLogo({ size = 36, showText = true, className = "" }: { size?
       {showText && (
         <div className="flex flex-col leading-none">
           <div className="flex items-center gap-1.5">
-            <span style={{ fontSize: 16, fontWeight: 900, letterSpacing: "0.08em", color: "#F8FAFC" }}>
+            <span style={{ fontSize: 16, fontWeight: 900, letterSpacing: "0.08em", color: "var(--text-primary)" }}>
               VCRT
             </span>
             <span
