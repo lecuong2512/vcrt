@@ -80,6 +80,8 @@ export default function NextDNSScreen() {
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [showEditId, setShowEditId] = useState(false);
+  const [showFullProfileId, setShowFullProfileId] = useState(false);
+  const [showRawApiKey, setShowRawApiKey] = useState(false);
 
   // API Key & Cloud State
   const [hasApiKey, setHasApiKey] = useState(false);
@@ -652,8 +654,20 @@ export default function NextDNSScreen() {
                 <div className="flex items-center gap-2">
                   <span style={{ fontSize: 12, color: "#64748B" }}>Profile ID:</span>
                   <span style={{ fontSize: 18, fontWeight: 800, color: "#38BDF8", fontFamily: "JetBrains Mono, monospace" }}>
-                    {profileId || ""}
+                    {showFullProfileId
+                      ? (profileId || "")
+                      : (profileId ? profileId.slice(0, 2) + "••••" : "")}
                   </span>
+                  {profileId && (
+                    <button
+                      type="button"
+                      onClick={() => setShowFullProfileId(!showFullProfileId)}
+                      style={{ background: "transparent", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                      title={showFullProfileId ? "Ẩn ID" : "Hiện ID đầy đủ"}
+                    >
+                      {showFullProfileId ? "🙈" : "👁"}
+                    </button>
+                  )}
                 </div>
                 <button
                   onClick={() => setShowEditId(!showEditId)}
@@ -766,14 +780,23 @@ export default function NextDNSScreen() {
                 </a>{" "}
                 để mở khóa đầy đủ Thống Kê, Nhật Ký (Logs), Bộ Lọc Blocklists, Chặn App & Web!
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  type="password"
-                  value={apiKeyInput}
-                  onChange={(e) => setApiKeyInput(e.target.value)}
-                  placeholder="Dán API Key vào đây..."
-                  style={{ flex: 1, background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#fff", fontSize: 13, outline: "none" }}
-                />
+              <div style={{ display: "flex", gap: 8, position: "relative" }}>
+                <div style={{ flex: 1, position: "relative" }}>
+                  <input
+                    type={showRawApiKey ? "text" : "password"}
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder="Dán API Key vào đây..."
+                    style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowRawApiKey(!showRawApiKey)}
+                    style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                  >
+                    {showRawApiKey ? "🙈" : "👁"}
+                  </button>
+                </div>
                 <button
                   onClick={handleSaveApiKey}
                   disabled={saving}

@@ -436,7 +436,7 @@ cmd_status() {
         for l_ip in $(awk '$3=="0x2" && $6=="br-lan" {print $1}' /proc/net/arp 2>/dev/null); do
             local l_mac=$(awk -v ip="$l_ip" '$1==ip {print tolower($4)}' /proc/net/arp 2>/dev/null | head -n1)
             if [ -n "$l_mac" ] && ! grep -qi "^${l_mac}|" "$wifi_tmp" 2>/dev/null; then
-                if ping -c 1 -W 1 "$l_ip" >/dev/null 2>&1; then
+                if ping -c 1 -W 1 "$l_ip" >/dev/null 2>&1 || ip neigh show dev br-lan 2>/dev/null | grep -i "$l_mac" | grep -v "fe80" | grep -qE "REACHABLE|DELAY|PROBE|STALE"; then
                     online_total=$(( online_total + 1 ))
                 fi
             fi
@@ -537,14 +537,21 @@ cmd_clients() {
 
                 [ -n "$w_tx" ] && [ "$w_tx" != "N/A" ] && speed_str="${w_tx} (TX Bitrate)"
             else
-                # B. Kiểm tra Cáp LAN cắm dây (Chỉ chấp nhận nếu phản hồi Ping)
+                # B. Kiểm tra Cáp LAN cắm dây (Xác thực qua switch port, ping hoặc Linux neighbor table)
                 local a_ent=$(grep -i "$mac_low" /proc/net/arp 2>/dev/null | head -n1)
                 local a_flg=$(echo "$a_ent" | awk '{print $3}')
                 if [ "$a_flg" = "0x2" ] && [ -n "$ip" ]; then
+                    local is_alive=0
                     if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
+                        is_alive=1
+                    elif ip neigh show dev br-lan 2>/dev/null | grep -i "$mac_low" | grep -v "fe80" | grep -qE "REACHABLE|DELAY|PROBE|STALE"; then
+                        is_alive=1
+                    fi
+
+                    if [ "$is_alive" -eq 1 ]; then
                         is_online=1
                         conn_type="Cáp Mạng LAN 🔌 (Cổng Switch)"
-                        time_str="Đang trực tuyến (Phản hồi Ping)"
+                        time_str="Đang trực tuyến (Dây cáp LAN)"
                         speed_str="100 Mbps Full-Duplex"
                         icon="💻"
                     fi

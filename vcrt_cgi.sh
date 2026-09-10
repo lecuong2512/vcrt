@@ -902,7 +902,13 @@ if [ "$ACTION" = "clients" ]; then
                 arp_entry=$(echo "$arp_data" | grep -i "$mac_low" | head -n1)
                 arp_flag=$(echo "$arp_entry" | awk '{print $3}')
                 if [ "$arp_flag" = "0x2" ]; then
+                    is_alive=0
                     if ping -c 1 -W 1 "$ip" >/dev/null 2>&1; then
+                        is_alive=1
+                    elif ip neigh show dev br-lan 2>/dev/null | grep -i "$mac_low" | grep -v "fe80" | grep -qE "REACHABLE|DELAY|PROBE|STALE"; then
+                        is_alive=1
+                    fi
+                    if [ "$is_alive" -eq 1 ]; then
                         is_lan=1
                         band="Dây LAN"
                         rssi=-50

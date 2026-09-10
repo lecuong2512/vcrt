@@ -2160,6 +2160,12 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
   const [tgTesting, setTgTesting] = useState(false);
   const [tgMsg, setTgMsg] = useState<{ text: string; error?: boolean } | null>(null);
   const [showTokenInput, setShowTokenInput] = useState(false);
+  const [showRawToken, setShowRawToken] = useState(false);
+  const [showChatIdInput, setShowChatIdInput] = useState(false);
+  const [showRawChatId, setShowRawChatId] = useState(false);
+  const [showOldPw, setShowOldPw] = useState(false);
+  const [showNewPw, setShowNewPw] = useState(false);
+  const [showConfirmPw, setShowConfirmPw] = useState(false);
 
   const fetchTelegramConfig = async () => {
     const data = await getTelegramConfigApi();
@@ -2202,6 +2208,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
         setTgMsg({ text: "✅ Đã lưu cấu hình và đồng bộ dịch vụ Telegram Bot thành công!" });
         setTgToken("");
         setShowTokenInput(false);
+        setShowChatIdInput(false);
         await fetchTelegramConfig();
       } else {
         setTgMsg({ text: "❌ Lỗi lưu cấu hình Telegram Bot.", error: true });
@@ -2344,34 +2351,61 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
         <form onSubmit={handleChangePassword} className="flex flex-col gap-2.5">
           <div>
             <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>Mật khẩu hiện tại</div>
-            <input
-              type="password"
-              value={oldPass}
-              onChange={(e) => setOldPass(e.target.value)}
-              placeholder="Mật khẩu cũ..."
-              style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-            />
+            <div style={{ position: "relative" }}>
+              <input
+                type={showOldPw ? "text" : "password"}
+                value={oldPass}
+                onChange={(e) => setOldPass(e.target.value)}
+                placeholder="Mật khẩu cũ..."
+                style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowOldPw(!showOldPw)}
+                style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+              >
+                {showOldPw ? "🙈" : "👁"}
+              </button>
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
             <div>
               <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>Mật khẩu mới</div>
-              <input
-                type="password"
-                value={newPass}
-                onChange={(e) => setNewPass(e.target.value)}
-                placeholder="Mật khẩu mới..."
-                style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showNewPw ? "text" : "password"}
+                  value={newPass}
+                  onChange={(e) => setNewPass(e.target.value)}
+                  placeholder="Mật khẩu mới..."
+                  style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowNewPw(!showNewPw)}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                >
+                  {showNewPw ? "🙈" : "👁"}
+                </button>
+              </div>
             </div>
             <div>
               <div style={{ fontSize: 11, color: "#64748B", marginBottom: 4 }}>Xác nhận mật khẩu</div>
-              <input
-                type="password"
-                value={confirmPass}
-                onChange={(e) => setConfirmPass(e.target.value)}
-                placeholder="Nhập lại mật khẩu..."
-                style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showConfirmPw ? "text" : "password"}
+                  value={confirmPass}
+                  onChange={(e) => setConfirmPass(e.target.value)}
+                  placeholder="Nhập lại mật khẩu..."
+                  style={{ width: "100%", background: "#0B0F17", border: "1px solid #334155", borderRadius: 8, padding: "8px 38px 8px 12px", color: "#fff", fontSize: 13, outline: "none", boxSizing: "border-box" }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmPw(!showConfirmPw)}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                >
+                  {showConfirmPw ? "🙈" : "👁"}
+                </button>
+              </div>
             </div>
           </div>
 
@@ -2452,7 +2486,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
               {tgConfig?.has_token && !showTokenInput && (
                 <button
                   type="button"
-                  onClick={() => setShowTokenInput(true)}
+                  onClick={() => { setShowTokenInput(true); setShowRawToken(false); }}
                   style={{ background: "transparent", border: "none", color: "#38BDF8", fontSize: 10, cursor: "pointer" }}
                 >
                   Thay đổi Token
@@ -2478,48 +2512,110 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                 <span style={{ fontSize: 10, color: "#64748B" }}>Đã lưu bảo mật</span>
               </div>
             ) : (
-              <input
-                type="password"
-                value={tgToken}
-                onChange={(e) => setTgToken(e.target.value)}
-                placeholder="vd: 123456789:ABCdefGHIjklMNO_xyz..."
-                style={{
-                  width: "100%",
-                  background: "#0B0F17",
-                  border: "1px solid #334155",
-                  borderRadius: 8,
-                  padding: "8px 12px",
-                  color: "#fff",
-                  fontSize: 12,
-                  outline: "none",
-                  boxSizing: "border-box"
-                }}
-              />
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showRawToken ? "text" : "password"}
+                  value={tgToken}
+                  onChange={(e) => setTgToken(e.target.value)}
+                  placeholder="vd: 123456789:ABCdefGHIjklMNO_xyz..."
+                  style={{
+                    width: "100%",
+                    background: "#0B0F17",
+                    border: "1px solid #334155",
+                    borderRadius: 8,
+                    padding: "8px 38px 8px 12px",
+                    color: "#fff",
+                    fontSize: 12,
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRawToken(!showRawToken)}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                >
+                  {showRawToken ? "🙈" : "👁"}
+                </button>
+              </div>
             )}
           </div>
 
-          {/* Admin Chat ID Input */}
+          {/* Admin Chat ID Input (Ẩn bảo mật sau khi nhập) */}
           <div>
-            <div style={{ fontSize: 11, color: "#94A3B8", marginBottom: 4 }}>
-              Admin Chat ID (lấy từ @userinfobot)
+            <div className="flex justify-between items-center mb-1">
+              <span style={{ fontSize: 11, color: "#94A3B8" }}>Admin Chat ID (lấy từ @userinfobot)</span>
+              {tgConfig?.chat_id && !showChatIdInput && (
+                <button
+                  type="button"
+                  onClick={() => { setShowChatIdInput(true); setShowRawChatId(false); }}
+                  style={{ background: "transparent", border: "none", color: "#38BDF8", fontSize: 10, cursor: "pointer" }}
+                >
+                  Thay đổi Chat ID
+                </button>
+              )}
             </div>
-            <input
-              type="text"
-              value={tgChatId}
-              onChange={(e) => setTgChatId(e.target.value)}
-              placeholder="vd: 123456789"
-              style={{
-                width: "100%",
-                background: "#0B0F17",
-                border: "1px solid #334155",
-                borderRadius: 8,
-                padding: "8px 12px",
-                color: "#fff",
-                fontSize: 12,
-                outline: "none",
-                boxSizing: "border-box"
-              }}
-            />
+
+            {tgConfig?.chat_id && !showChatIdInput ? (
+              <div
+                className="mono flex items-center justify-between"
+                style={{
+                  width: "100%",
+                  background: "#0B0F17",
+                  border: "1px solid #1E293B",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  color: "#38BDF8",
+                  fontSize: 12,
+                  boxSizing: "border-box"
+                }}
+              >
+                <span>
+                  👤 {showRawChatId
+                    ? tgConfig.chat_id
+                    : (tgConfig.chat_id.length > 4
+                        ? tgConfig.chat_id.slice(0, 2) + "••••••" + tgConfig.chat_id.slice(-2)
+                        : "••••••••")}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowRawChatId(!showRawChatId)}
+                    style={{ background: "transparent", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 12 }}
+                  >
+                    {showRawChatId ? "🙈 Ẩn" : "👁 Hiện"}
+                  </button>
+                  <span style={{ fontSize: 10, color: "#64748B" }}>Đã lưu bảo mật</span>
+                </div>
+              </div>
+            ) : (
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showRawChatId ? "text" : "password"}
+                  value={tgChatId}
+                  onChange={(e) => setTgChatId(e.target.value)}
+                  placeholder="vd: 123456789"
+                  style={{
+                    width: "100%",
+                    background: "#0B0F17",
+                    border: "1px solid #334155",
+                    borderRadius: 8,
+                    padding: "8px 38px 8px 12px",
+                    color: "#fff",
+                    fontSize: 12,
+                    outline: "none",
+                    boxSizing: "border-box"
+                  }}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowRawChatId(!showRawChatId)}
+                  style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 13 }}
+                >
+                  {showRawChatId ? "🙈" : "👁"}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Alert Toggles */}
