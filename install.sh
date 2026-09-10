@@ -75,7 +75,7 @@ echo "🎉 VCRT OS v1.0.0 DEPLOY SUCCESSFUL!"
 echo "=================================================="
 
 # 8. Gui thong bao tuc thi len Telegram Bot
-KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traffic"},{"text":"/wifi"}],[{"text":"/ping"},{"text":"/help"}]],"resize_keyboard":true,"persistent":true}'
+KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traffic"},{"text":"/wifi"}],[{"text":"/ping"},{"text":"/help"}]],"resize_keyboard":true,"is_persistent":true}'
 
 if [ -f "$CONF_FILE" ]; then
     . "$CONF_FILE" 2>/dev/null || true

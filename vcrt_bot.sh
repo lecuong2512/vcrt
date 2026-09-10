@@ -17,7 +17,42 @@ REPORTED_DATE_FILE="/tmp/vcrt_reported_date.tmp"
 
 mkdir -p "$VCRT_CONF_DIR" /tmp 2>/dev/null
 
-KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traffic"},{"text":"/wifi"}],[{"text":"/ping"},{"text":"/help"}]],"resize_keyboard":true,"persistent":true}'
+KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traffic"},{"text":"/wifi"}],[{"text":"/ping"},{"text":"/help"}]],"resize_keyboard":true,"is_persistent":true}'
+
+# ─── BẢO VỆ DỮ LIỆU NHẠY CẢM VỚI TELEGRAM SPOILER (<tg-spoiler>) ──────────────
+# Khi hiển thị IP và MAC, làm mờ 1 phần bất kỳ. Bấm vào phần mờ sẽ hiển thị đầy đủ!
+mask_ip() {
+    local ip="$1"
+    echo "$ip" | awk -F. '
+    NF==4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ {
+        printf "<code>%s.%s.%s.<tg-spoiler>%s</tg-spoiler></code>\n", $1, $2, $3, $4;
+        exit;
+    }
+    { printf "<code>%s</code>\n", $0; }'
+}
+
+mask_wan_ip() {
+    local ip="$1"
+    echo "$ip" | awk -F. '
+    NF==4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ {
+        printf "<code>%s.%s.<tg-spoiler>%s.%s</tg-spoiler></code>\n", $1, $2, $3, $4;
+        exit;
+    }
+    { printf "<code>%s</code>\n", $0; }'
+}
+
+mask_mac() {
+    local mac="$1"
+    echo "$mac" | awk '{
+        m = toupper($1);
+        if (m ~ /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/) {
+            split(m, a, ":");
+            printf "<code>%s:%s:%s:<tg-spoiler>%s:%s:%s</tg-spoiler></code>\n", a[1], a[2], a[3], a[4], a[5], a[6];
+            exit;
+        }
+        printf "<code>%s</code>\n", m;
+    }'
+}
 
 load_config() {
     BOT_ENABLED=0
@@ -84,10 +119,12 @@ get_wifi_stations() {
     for ifc in $devs; do
         case "$ifc" in *sta*|*mon*) continue ;; esac
         local ch=$(iw dev "$ifc" info 2>/dev/null | awk '/channel/{print $2}')
+        [ -z "$ch" ] && ch=$(iwinfo "$ifc" info 2>/dev/null | awk '/Channel:/{print $4}')
         case "$ch" in ''|*[!0-9]*) ch=6 ;; esac
         local b="2.4GHz"
         [ "$ch" -gt 14 ] 2>/dev/null && b="5GHz"
 
+        # Quét trạm qua iw dev (chuẩn xác kernel)
         iw dev "$ifc" station dump 2>/dev/null | awk -v iface="$ifc" -v band="$b" '
         /^Station/ {
             if (mac != "") {
@@ -98,7 +135,7 @@ get_wifi_stations() {
             con = 0;
             bitrate = "N/A";
         }
-        /signal:/ { sig = $2 " dBm"; }
+        $1 == "signal:" { sig = $2 " dBm"; }
         /connected time:/ { con = int($3); }
         /tx bitrate:/ { bitrate = $3 " " $4; }
         END {
@@ -106,7 +143,23 @@ get_wifi_stations() {
                 print mac "|" iface "|" sig "|" band "|" con "|" bitrate;
             }
         }'
-    done
+
+        # Bổ sung iwinfo assoclist nếu có
+        if command -v iwinfo >/dev/null 2>&1; then
+            iwinfo "$ifc" assoclist 2>/dev/null | awk -v iface="$ifc" -v band="$b" '
+            /^[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:/ {
+                mac = tolower($1);
+                sig = $2 " dBm";
+                con = 0;
+                bitrate = "N/A";
+                getline;
+                if ($0 ~ /TX:/) {
+                    bitrate = $2 " MBit/s";
+                }
+                print mac "|" iface "|" sig "|" band "|" con "|" bitrate;
+            }'
+        fi
+    done | sort -u -t'|' -k1,1
 }
 
 # ─── WATCHER 1: THEO DÕI THIẾT BỊ WI-FI MỚI (LIVE) ───────────────────────────
@@ -144,11 +197,13 @@ watch_wifi_devices() {
                     [ -n "$w_sig" ] && [ "$w_sig" != "N/A" ] && band="${band} · Tín hiệu: ${w_sig}"
 
                     local now_str=$(date +'%H:%M:%S - %d/%m/%Y' 2>/dev/null || echo "")
+                    local m_ip=$(mask_ip "$ip")
+                    local m_mac=$(mask_mac "$mac_up")
                     local alert_msg="🔔 <b>THIẾT BỊ VỪA KẾT NỐI WI-FI!</b>
 ━━━━━━━━━━━━━━━━━━
 📱 <b>Tên máy:</b> <code>${name}</code>
-📍 <b>Địa chỉ IP:</b> <code>${ip}</code>
-🔑 <b>Địa chỉ MAC:</b> <code>${mac_up}</code>
+📍 <b>Địa chỉ IP:</b> ${m_ip}
+🔑 <b>Địa chỉ MAC:</b> ${m_mac}
 📡 <b>Băng tần:</b> <code>${band}</code>
 ⏰ <b>Thời gian:</b> <code>${now_str}</code>
 ━━━━━━━━━━━━━━━━━━
@@ -189,11 +244,13 @@ watch_block_timers() {
                 load_config
                 if [ "$BOT_ENABLED" = "1" ] && [ "$NOTIF_BLOCK_EXPIRE" = "1" ]; then
                     [ -z "$b_name" ] && b_name="Thiết bị"
+                    local m_ip=$(mask_ip "$b_ip")
+                    local m_mac=$(mask_mac "$b_mac")
                     local unblock_msg="🎉 <b>ĐÃ HẾT GIỜ NGẮT KẾT NỐI!</b>
 ━━━━━━━━━━━━━━━━━━
 📱 <b>Thiết bị:</b> <code>${b_name}</code>
-📍 <b>Địa chỉ IP:</b> <code>${b_ip}</code>
-🔑 <b>Địa chỉ MAC:</b> <code>${b_mac}</code>
+📍 <b>Địa chỉ IP:</b> ${m_ip}
+🔑 <b>Địa chỉ MAC:</b> ${m_mac}
 ━━━━━━━━━━━━━━━━━━
 <i>Router đã tự động khôi phục toàn bộ quyền truy cập Internet!</i>"
                     send_msg "$unblock_msg"
@@ -397,7 +454,7 @@ cmd_status() {
 ⚙️ <b>CPU Load:</b> <code>${load}</code> [${cpu_blocks}]
 💾 <b>Bộ nhớ RAM:</b> <code>${mem_used}MB / ${mem_total}MB (${mem_pct}%)</code>
 💿 <b>Bộ nhớ Flash:</b> <code>${rom_used}</code>
-🌐 <b>Địa chỉ WAN:</b> <code>${wan_ip}</code>
+🌐 <b>Địa chỉ WAN:</b> $(mask_wan_ip "${wan_ip}")
 📶 <b>Wi-Fi Kênh:</b> <code>2.4G (CH ${ch_2g}) · 5G (CH ${ch_5g})</code>
 👥 <b>Thiết bị ĐANG ONLINE:</b> <code>${online_total} máy</code>
 ━━━━━━━━━━━━━━━━━━
@@ -510,11 +567,13 @@ cmd_clients() {
 
             count=$((count + 1))
             local mac_u=$(echo "$mac" | tr '[:lower:]' '[:upper:]')
+            local m_ip=$(mask_ip "$ip")
+            local m_mac=$(mask_mac "$mac_u")
             
-            local detail_block="   ├ 📍 IP: <code>${ip}</code>
-   ├ 🔑 MAC: <code>${mac_u}</code>
+            local detail_block="   ├ 📍 IP: ${m_ip}
+   ├ 🔑 MAC: ${m_mac}
    ├ 📡 Kết nối: <code>${conn_type}</code>
-   ├ ⏱ Thời gian: <code>${time_str}</code>"
+   ├ ⏱ Bắt sóng: <code>${time_str}</code>"
             [ -n "$sig_str" ] && detail_block="${detail_block}
    ├ 📶 Tín hiệu: <code>${sig_str}</code>"
             [ -n "$speed_str" ] && detail_block="${detail_block}
@@ -559,11 +618,13 @@ ${detail_block}
 
                 count=$((count + 1))
                 local sm_u=$(echo "$sm_mac" | tr '[:lower:]' '[:upper:]')
+                local m_sip=$(mask_ip "$s_ip")
+                local m_smac=$(mask_mac "$sm_u")
                 dev_entries="${dev_entries}${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
-   ├ 📍 IP: <code>${s_ip}</code>
-   ├ 🔑 MAC: <code>${sm_u}</code>
+   ├ 📍 IP: ${m_sip}
+   ├ 🔑 MAC: ${m_smac}
    ├ 📡 Kết nối: <code>${conn_type}</code>
-   ├ ⏱ Thời gian: <code>${time_str}</code>
+   ├ ⏱ Bắt sóng: <code>${time_str}</code>
    ├ 📶 Tín hiệu: <code>${sig_str:-N/A}</code>
    └ ⚡ Tốc độ: <code>${sm_tx:-N/A}</code>
 "
@@ -751,9 +812,10 @@ Ví dụ: <code>/block 00:11:22:33:44:55 60</code>"
     mv "${TIMED_BLOCKS_FILE}.tmp" "$TIMED_BLOCKS_FILE" 2>/dev/null || true
     echo "${target_mac_low}|soft|${now_epoch}|${expire}|${dur}|Telegram-Block|N/A" >> "$TIMED_BLOCKS_FILE"
 
+    local m_tmac=$(mask_mac "$target_mac")
     local msg="⛔ <b>ĐÃ CHẶN KẾT NỐI INTERNET!</b>
 ━━━━━━━━━━━━━━━━━━
-🔑 <b>MAC:</b> <code>${target_mac}</code>
+🔑 <b>MAC:</b> ${m_tmac}
 ⏱ <b>Thời hạn chặn:</b> <code>${dur} phút</code>
 ━━━━━━━━━━━━━━━━━━
 <i>Hệ thống sẽ tự động mở lại mạng khi hết giờ hoặc gõ /unblock ${target_mac}</i>"
@@ -780,9 +842,10 @@ Ví dụ: <code>/unblock 00:11:22:33:44:55</code>"
     [ -f "$TIMED_BLOCKS_FILE" ] && grep -v -i "^${target_mac_low}|" "$TIMED_BLOCKS_FILE" > "${TIMED_BLOCKS_FILE}.tmp" 2>/dev/null || true
     mv "${TIMED_BLOCKS_FILE}.tmp" "$TIMED_BLOCKS_FILE" 2>/dev/null || true
 
+    local m_tmac=$(mask_mac "$target_mac")
     local msg="🔓 <b>ĐÃ MỞ LẠI KẾT NỐI INTERNET!</b>
 ━━━━━━━━━━━━━━━━━━
-🔑 <b>MAC:</b> <code>${target_mac}</code>
+🔑 <b>MAC:</b> ${m_tmac}
 ━━━━━━━━━━━━━━━━━━
 <i>Thiết bị đã có thể truy cập mạng bình thường.</i>"
     send_msg "$msg"
@@ -831,10 +894,11 @@ cleanup() {
 }
 trap cleanup INT TERM EXIT
 
-send_msg "🚀 <b>VCRT OS v1.0.0 - Telegram Bot đã sẵn sàng nhận lệnh!</b>
+send_msg "🟢 <b>VCRT OS v1.0.0 - TELEGRAM BOT ĐÃ SẴN SÀNG!</b>
 ━━━━━━━━━━━━━━━━━━
-⏱ Hệ thống giám sát thiết bị & lưu lượng 24/7 đang hoạt động.
-📱 Gõ /clients hoặc bấm menu bên dưới để kiểm tra ngay."
+⚡ Hệ thống giám sát thiết bị & lưu lượng 24/7 đang hoạt động.
+📡 Quản lý phát sóng Wi-Fi 2.4GHz & 5GHz · Quét & đổi nguồn WISP
+📱 Gõ <b>/clients</b> để xem danh sách máy online, băng tần và thời gian bắt sóng."
 
 OFFSET=0
 API_URL="https://api.telegram.org/bot${BOT_TOKEN}"
@@ -864,7 +928,7 @@ while true; do
 
                 case "$cmd_name" in
                     /status*|/info*|/router*) cmd_status ;;
-                    /client|/clients*|/device*|/devices*|/thietbi*) cmd_clients ;;
+                    /client*|/clients*|/device*|/devices*|/thietbi*|/may*) cmd_clients ;;
                     /traffic*|/dungluong*|/data*) cmd_traffic ;;
                     /wifi*|/song*) cmd_wifi ;;
                     /ping*|/test*) cmd_ping ;;

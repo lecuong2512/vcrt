@@ -1511,7 +1511,17 @@ function WiFiScreen() {
   const [ssid24, setSsid24] = useState("VC 2.4Ghz");
   const [pass24, setPass24] = useState("25122035");
   const [ch24, setCh24] = useState("6");
+  const [power24, setPower24] = useState("20");
   const [show24, setShow24] = useState(false);
+
+  // Wi-Fi Scanner & Uplink Connector State
+  const [scanningBand, setScanningBand] = useState<"2.4g" | "5g" | null>(null);
+  const [scannedNetworks, setScannedNetworks] = useState<any[]>([]);
+  const [scanModalOpen, setScanModalOpen] = useState(false);
+  const [selectedUplinkNet, setSelectedUplinkNet] = useState<any | null>(null);
+  const [uplinkPass, setUplinkPass] = useState("");
+  const [showUplinkPass, setShowUplinkPass] = useState(false);
+  const [isConnectingUplink, setIsConnectingUplink] = useState(false);
 
   // 2-Layer Confirmation & Rollback State
   // 0 = Idle, 1 = Review (Lớp 1), 2 = Confirm & Commit (Lớp 2), 3 = Rollback Countdown
@@ -1534,6 +1544,7 @@ function WiFiScreen() {
           if (res.wifi24.ssid) setSsid24(res.wifi24.ssid);
           if (res.wifi24.pass) setPass24(res.wifi24.pass);
           if (res.wifi24.channel) setCh24(res.wifi24.channel);
+          if (res.wifi24.power) setPower24(res.wifi24.power);
         }
       }
     };
@@ -1560,7 +1571,7 @@ function WiFiScreen() {
   const handleStartApply = async () => {
     setIsApplying(true);
     await postApi("wifi_apply", {
-      ssid5, pass5, ch5, power5, ssid24, pass24, ch24
+      ssid5, pass5, ch5, power5, ssid24, pass24, ch24, power24
     });
     setIsApplying(false);
     setCountdown(60);
@@ -1673,16 +1684,221 @@ function WiFiScreen() {
               </button>
             </div>
           </div>
-          <div style={{ flex: 1 }}>
-            <label style={labelStyle}>Kênh phát</label>
-            <select style={{ ...inputStyle }} value={ch24} onChange={(e) => setCh24(e.target.value)}>
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"].map((ch) => (
-                <option key={ch} value={ch} style={{ background: "#161F30" }}>Kênh {ch}</option>
-              ))}
-            </select>
+          <div className="flex gap-3">
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Kênh phát</label>
+              <select style={{ ...inputStyle }} value={ch24} onChange={(e) => setCh24(e.target.value)}>
+                {["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"].map((ch) => (
+                  <option key={ch} value={ch} style={{ background: "#161F30" }}>Kênh {ch}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ flex: 1 }}>
+              <label style={labelStyle}>Công suất (dBm)</label>
+              <select style={{ ...inputStyle }} value={power24} onChange={(e) => setPower24(e.target.value)}>
+                {["14", "17", "20", "23"].map((p) => (
+                  <option key={p} value={p} style={{ background: "#161F30" }}>{p} dBm</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
       </div>
+
+            {/* NGUỒN WI-FI UPLINK & QUÉT SÓNG (WISP REPEATER) */}
+      <div style={{ background: "#161F30", borderRadius: 16, border: "1px solid #334155", padding: 16 }}>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span style={{ fontSize: 16 }}>📡</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>Nguồn Wi-Fi Kích Sóng (WISP Repeater)</span>
+          </div>
+          <span style={{ fontSize: 11, background: "#1E293B", color: "#38BDF8", padding: "2px 8px", borderRadius: 6, fontWeight: 600 }}>
+            Thay đổi Uplink
+          </span>
+        </div>
+        <p style={{ fontSize: 12, color: "#94A3B8", marginBottom: 12, lineHeight: 1.4 }}>
+          Quét sóng Wi-Fi môi trường xung quanh để đổi nguồn kết nối Internet không dây cho router.
+        </p>
+        <div className="flex gap-2">
+          <button
+            onClick={async () => {
+              setScanningBand("2.4g");
+              setScanModalOpen(true);
+              setScannedNetworks([]);
+              setSelectedUplinkNet(null);
+              const res = await fetchApi("wifi_scan", { band: "2.4g" });
+              setScanningBand(null);
+              if (res && res.networks) setScannedNetworks(res.networks);
+            }}
+            disabled={scanningBand !== null}
+            className="touch-btn flex-1 py-[10px] rounded-xl flex items-center justify-center gap-1.5"
+            style={{ background: "#065F46", color: "#10B981", fontSize: 12, fontWeight: 600, border: "1px solid #10B981" }}
+          >
+            <span>🔍</span> {scanningBand === "2.4g" ? "Đang quét 2.4G..." : "Quét sóng 2.4 GHz"}
+          </button>
+          <button
+            onClick={async () => {
+              setScanningBand("5g");
+              setScanModalOpen(true);
+              setScannedNetworks([]);
+              setSelectedUplinkNet(null);
+              const res = await fetchApi("wifi_scan", { band: "5g" });
+              setScanningBand(null);
+              if (res && res.networks) setScannedNetworks(res.networks);
+            }}
+            disabled={scanningBand !== null}
+            className="touch-btn flex-1 py-[10px] rounded-xl flex items-center justify-center gap-1.5"
+            style={{ background: "#1E3A5F", color: "#38BDF8", fontSize: 12, fontWeight: 600, border: "1px solid #38BDF8" }}
+          >
+            <span>🔍</span> {scanningBand === "5g" ? "Đang quét 5G..." : "Quét sóng 5 GHz"}
+          </button>
+        </div>
+      </div>
+
+      {/* MODAL DANH SÁCH SÓNG QUÉT ĐƯỢC */}
+      {scanModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center modal-backdrop" style={{ padding: 16 }}>
+          <div
+            style={{
+              background: "#161F30", borderRadius: 24, border: "1px solid #334155",
+              padding: 20, width: "100%", maxWidth: 440, maxHeight: "85vh", display: "flex", flexDirection: "column",
+              position: "relative", boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.75)"
+            }}
+          >
+            <div className="flex items-center justify-between pb-3 border-b border-[#222F46] mb-3">
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 700, color: "#F9FAFB" }}>
+                  {scanningBand ? "Đang dò tìm sóng Wi-Fi..." : "Kết Quả Quét Sóng Wi-Fi"}
+                </div>
+                <div style={{ fontSize: 11, color: "#94A3B8" }}>
+                  {scanningBand ? "Vui lòng chờ trong giây lát" : `Tìm thấy ${scannedNetworks.length} mạng khả dụng`}
+                </div>
+              </div>
+              <button
+                onClick={() => setScanModalOpen(false)}
+                style={{
+                  width: 30, height: 30, borderRadius: "50%", background: "#222F46", border: "1px solid #334155",
+                  color: "#94A3B8", display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 14, fontWeight: 700, cursor: "pointer"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Loading */}
+            {scanningBand && (
+              <div className="flex flex-col items-center justify-center py-8 gap-3">
+                <div className="animate-spin" style={{ fontSize: 28 }}>🔄</div>
+                <div style={{ fontSize: 13, color: "#38BDF8", fontWeight: 600 }}>
+                  Router đang quét dải tần {scanningBand}...
+                </div>
+              </div>
+            )}
+
+            {/* List */}
+            {!scanningBand && (
+              <div className="flex flex-col gap-2 overflow-y-auto pr-1" style={{ flex: 1, minHeight: 180 }}>
+                {scannedNetworks.length === 0 ? (
+                  <div className="text-center py-8 text-sm" style={{ color: "#94A3B8" }}>
+                    Không tìm thấy mạng Wi-Fi nào hoặc sóng quá yếu.
+                  </div>
+                ) : (
+                  scannedNetworks.map((net, idx) => (
+                    <div
+                      key={net.bssid || idx}
+                      onClick={() => {
+                        setSelectedUplinkNet(net);
+                        setUplinkPass("");
+                      }}
+                      className="touch-card p-3 rounded-xl flex items-center justify-between cursor-pointer"
+                      style={{
+                        background: selectedUplinkNet?.bssid === net.bssid ? "#1E293B" : "#0B0F17",
+                        border: selectedUplinkNet?.bssid === net.bssid ? "1px solid #38BDF8" : "1px solid #222F46"
+                      }}
+                    >
+                      <div className="flex flex-col gap-0.5">
+                        <div className="flex items-center gap-1.5">
+                          <span style={{ fontSize: 13, fontWeight: 700, color: "#F9FAFB" }}>{net.ssid}</span>
+                          {net.encryption && net.encryption !== "none" && (
+                            <span style={{ fontSize: 10 }}>🔒</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2" style={{ fontSize: 11, color: "#94A3B8" }}>
+                          <span>Kênh {net.channel}</span>
+                          <span>·</span>
+                          <span className="mono">{net.signal} dBm</span>
+                        </div>
+                      </div>
+                      <button
+                        style={{
+                          background: selectedUplinkNet?.bssid === net.bssid ? "#38BDF8" : "#222F46",
+                          color: selectedUplinkNet?.bssid === net.bssid ? "#0B0F17" : "#F9FAFB",
+                          border: "none", borderRadius: 8, padding: "6px 12px", fontSize: 11, fontWeight: 700
+                        }}
+                      >
+                        {selectedUplinkNet?.bssid === net.bssid ? "Đã chọn ✓" : "Chọn 🔗"}
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+
+            {/* Input Password & Connect Form */}
+            {selectedUplinkNet && (
+              <div className="mt-3 pt-3 border-t border-[#222F46] flex flex-col gap-2">
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#E2E8F0" }}>
+                  Kết nối tới: <strong style={{ color: "#38BDF8" }}>{selectedUplinkNet.ssid}</strong>
+                </div>
+                {selectedUplinkNet.encryption && selectedUplinkNet.encryption !== "none" ? (
+                  <div style={{ position: "relative" }}>
+                    <input
+                      style={{ ...inputStyle, paddingRight: 44, fontSize: 13, padding: "9px 12px" }}
+                      type={showUplinkPass ? "text" : "password"}
+                      value={uplinkPass}
+                      onChange={(e) => setUplinkPass(e.target.value)}
+                      placeholder="Nhập mật khẩu Wi-Fi nguồn..."
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowUplinkPass(!showUplinkPass)}
+                      style={{ position: "absolute", right: 10, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#94A3B8", cursor: "pointer", fontSize: 14 }}
+                    >
+                      {showUplinkPass ? "🙈" : "👁"}
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ fontSize: 11, color: "#10B981" }}>Mạng công cộng không có mật khẩu.</div>
+                )}
+                <button
+                  onClick={async () => {
+                    if (!selectedUplinkNet) return;
+                    setIsConnectingUplink(true);
+                    const res = await postApi("wifi_connect_uplink", {
+                      ssid: selectedUplinkNet.ssid,
+                      pass: uplinkPass,
+                      band: selectedUplinkNet.channel > 14 ? "5g" : "2.4g",
+                      bssid: selectedUplinkNet.bssid || ""
+                    });
+                    setIsConnectingUplink(false);
+                    setSelectedUplinkNet(null);
+                    setScanModalOpen(false);
+                    setUplinkPass("");
+                    setStatusMsg(res?.message || "Đã gửi lệnh kết nối Wi-Fi Uplink thành công!");
+                    setTimeout(() => setStatusMsg(""), 6000);
+                  }}
+                  disabled={isConnectingUplink}
+                  className="touch-btn w-full py-[11px] rounded-xl flex items-center justify-center gap-2"
+                  style={{ background: "#38BDF8", color: "#0B0F17", fontSize: 13, fontWeight: 700, border: "none" }}
+                >
+                  {isConnectingUplink ? "Đang cấu hình & kết nối..." : "XÁC NHẬN ĐỔI NGUỒN WI-FI ⚡"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Nút Kích hoạt Xác nhận Lớp 1 */}
       <button
@@ -1744,7 +1960,7 @@ function WiFiScreen() {
               <div style={{ fontSize: 12, fontWeight: 700, color: "#10B981", marginBottom: 6 }}>📶 Băng tần 2.4 GHz</div>
               <div style={{ fontSize: 12, color: "#E2E8F0" }}>Tên: <strong>{ssid24}</strong></div>
               <div style={{ fontSize: 12, color: "#E2E8F0" }}>Mật khẩu: <strong>{pass24}</strong></div>
-              <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>Kênh: {ch24}</div>
+              <div style={{ fontSize: 11, color: "#94A3B8", marginTop: 2 }}>Kênh: {ch24} · Công suất: {power24} dBm</div>
             </div>
 
             <div className="flex gap-3">
