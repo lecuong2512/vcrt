@@ -1527,6 +1527,7 @@ function WiFiScreen() {
   const [uplinkPass, setUplinkPass] = useState("");
   const [showUplinkPass, setShowUplinkPass] = useState(false);
   const [isConnectingUplink, setIsConnectingUplink] = useState(false);
+  const [uplinkError, setUplinkError] = useState("");
 
   // 2-Layer Confirmation & Rollback State
   // 0 = Idle, 1 = Review (Lớp 1), 2 = Confirm & Commit (Lớp 2), 3 = Rollback Countdown
@@ -1652,15 +1653,15 @@ function WiFiScreen() {
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Kênh phát</label>
               <select style={{ ...inputStyle }} value={ch5} onChange={(e) => setCh5(e.target.value)}>
-                {["36", "40", "44", "48", "149", "153", "157", "161"].map((ch) => (
-                  <option key={ch} value={ch} style={{ background: "#161F30" }}>Kênh {ch}</option>
+                {["auto", "36", "40", "44", "48", "149", "153", "157", "161"].map((ch) => (
+                  <option key={ch} value={ch} style={{ background: "#161F30" }}>{ch === "auto" ? "Tự động (Auto)" : `Kênh ${ch}`}</option>
                 ))}
               </select>
             </div>
             <div style={{ flex: 1 }}>
               <label style={labelStyle}>Công suất (dBm)</label>
               <select style={{ ...inputStyle }} value={power5} onChange={(e) => setPower5(e.target.value)}>
-                {["15", "18", "20", "23"].map((p) => (
+                {["14", "17", "20", "23"].map((p) => (
                   <option key={p} value={p} style={{ background: "#161F30" }}>{p} dBm</option>
                 ))}
               </select>
@@ -1876,10 +1877,20 @@ function WiFiScreen() {
                 ) : (
                   <div style={{ fontSize: 11, color: "#10B981" }}>Mạng công cộng không có mật khẩu.</div>
                 )}
+                {uplinkError && (
+                  <div style={{
+                    background: "#450A0A", border: "1px solid #EF4444", borderRadius: 10,
+                    padding: "10px 12px", color: "#FCA5A5", fontSize: 12, fontWeight: 600,
+                    lineHeight: 1.4
+                  }}>
+                    ⚠️ {uplinkError}
+                  </div>
+                )}
                 <button
                   onClick={async () => {
                     if (!selectedUplinkNet) return;
                     setIsConnectingUplink(true);
+                    setUplinkError("");
                     const res = await postApi("wifi_connect_uplink", {
                       ssid: selectedUplinkNet.ssid,
                       pass: uplinkPass,
@@ -1887,17 +1898,21 @@ function WiFiScreen() {
                       bssid: selectedUplinkNet.bssid || ""
                     });
                     setIsConnectingUplink(false);
-                    setSelectedUplinkNet(null);
-                    setScanModalOpen(false);
-                    setUplinkPass("");
-                    setStatusMsg(res?.message || "Đã gửi lệnh kết nối Wi-Fi Uplink thành công!");
-                    setTimeout(() => setStatusMsg(""), 6000);
+                    if (res && res.status === "ok") {
+                      setSelectedUplinkNet(null);
+                      setScanModalOpen(false);
+                      setUplinkPass("");
+                      setStatusMsg(res.message || "Đã kết nối thành công tới Wi-Fi nguồn!");
+                      setTimeout(() => setStatusMsg(""), 6000);
+                    } else {
+                      setUplinkError(res?.message || "Mật khẩu Wi-Fi không chính xác hoặc không thể kết nối!");
+                    }
                   }}
                   disabled={isConnectingUplink}
                   className="touch-btn w-full py-[11px] rounded-xl flex items-center justify-center gap-2"
-                  style={{ background: "#38BDF8", color: "#0B0F17", fontSize: 13, fontWeight: 700, border: "none" }}
+                  style={{ background: isConnectingUplink ? "#222F46" : "#38BDF8", color: isConnectingUplink ? "#94A3B8" : "#0B0F17", fontSize: 13, fontWeight: 700, border: "none" }}
                 >
-                  {isConnectingUplink ? "Đang cấu hình & kết nối..." : "XÁC NHẬN ĐỔI NGUỒN WI-FI ⚡"}
+                  {isConnectingUplink ? "Đang xác thực & kiểm tra kết nối..." : "XÁC NHẬN ĐỔI NGUỒN WI-FI ⚡"}
                 </button>
               </div>
             )}

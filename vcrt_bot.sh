@@ -1,5 +1,14 @@
 #!/bin/sh
 export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
+
+# ─── ĐẢM BẢO CHỈ DUY NHẤT 1 TIẾN TRÌNH BOT CHẠY NGẦM (TRÁNH TRẢ LỜI 2 LẦN) ────
+MY_PID="$$"
+for old_pid in $(pgrep -f "vcrt_bot.sh" 2>/dev/null); do
+    if [ "$old_pid" != "$MY_PID" ]; then
+        kill -9 "$old_pid" 2>/dev/null || true
+    fi
+done
+
 # ==============================================================================
 # VCRT OS v1.0.0 - CYBERPUNK TELEGRAM BOT & NOTIFICATION DAEMON (24/7)
 # Giám sát thiết bị thực tế, đo đạc lưu lượng chính xác, tự động mở mạng
@@ -20,39 +29,24 @@ mkdir -p "$VCRT_CONF_DIR" /tmp 2>/dev/null
 KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traffic"},{"text":"/wifi"}],[{"text":"/ping"},{"text":"/help"}]],"resize_keyboard":true,"is_persistent":true}'
 
 # ─── BẢO VỆ DỮ LIỆU NHẠY CẢM VỚI TELEGRAM SPOILER (<tg-spoiler>) ──────────────
-# Khi hiển thị IP và MAC, làm mờ 1 phần. Bấm vào phần mờ nào chỉ hiện phần đó!
-# Chuẩn Telegram: Thẻ <tg-spoiler> KHÔNG ĐƯỢC lồng bên trong <code>!
+# Ẩn toàn bộ IP và toàn bộ MAC theo yêu cầu của người dùng
 mask_ip() {
     local ip="$1"
-    echo "$ip" | awk -F. '
-    NF==4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ {
-        printf "<code>%s.%s.%s.</code><tg-spoiler>%s</tg-spoiler>\n", $1, $2, $3, $4;
-        exit;
-    }
-    { printf "<code>%s</code>\n", $0; }'
+    [ -z "$ip" ] && ip="N/A"
+    printf "<tg-spoiler>%s</tg-spoiler>\n" "$ip"
 }
 
 mask_wan_ip() {
     local ip="$1"
-    echo "$ip" | awk -F. '
-    NF==4 && $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+$/ && $3 ~ /^[0-9]+$/ && $4 ~ /^[0-9]+$/ {
-        printf "<code>%s.%s.</code><tg-spoiler>%s.%s</tg-spoiler>\n", $1, $2, $3, $4;
-        exit;
-    }
-    { printf "<code>%s</code>\n", $0; }'
+    [ -z "$ip" ] && ip="N/A"
+    printf "<tg-spoiler>%s</tg-spoiler>\n" "$ip"
 }
 
 mask_mac() {
     local mac="$1"
-    echo "$mac" | awk '{
-        m = toupper($1);
-        if (m ~ /^([0-9A-F]{2}:){5}[0-9A-F]{2}$/) {
-            split(m, a, ":");
-            printf "<code>%s:%s:%s:</code><tg-spoiler>%s:%s:%s</tg-spoiler>\n", a[1], a[2], a[3], a[4], a[5], a[6];
-            exit;
-        }
-        printf "<code>%s</code>\n", m;
-    }'
+    [ -z "$mac" ] && mac="N/A"
+    local mac_u=$(echo "$mac" | tr 'a-z' 'A-Z')
+    printf "<tg-spoiler>%s</tg-spoiler>\n" "$mac_u"
 }
 
 load_config() {
@@ -483,15 +477,19 @@ cmd_status() {
 # ─── CMD_CLIENTS: 100% ONLINE THỰC TẾ (LỌC BỎ HOÀN TOÀN MÁY ĐÃ NGẮT KẾT NỐI) ──
 cmd_clients() {
     local target_chat="$1"
-    local wifi_tmp="/tmp/vcrt_wifi_cmd_clients.tmp"
+    local wifi_tmp="/tmp/vcrt_bot_wifi.tmp"
+    local card_dir="/tmp/vcrt_cards_$$"
+    rm -f "$wifi_tmp" 2>/dev/null || true
+    rm -rf "$card_dir" 2>/dev/null || true
+    mkdir -p "$card_dir" 2>/dev/null
+
+    # Quét danh sách trạm Wi-Fi thực tế
     get_wifi_stations > "$wifi_tmp" 2>/dev/null
 
     local count=0
     local processed_macs=""
-    local cards_file="/tmp/vcrt_client_cards.tmp"
-    : > "$cards_file"
 
-    # 1. Duyệt từ bảng DHCP Leases
+    # 1. Duyệt từ DHCP leases
     if [ -f /tmp/dhcp.leases ] && [ -s /tmp/dhcp.leases ]; then
         while read -r ltime mac ip name clid; do
             [ -z "$mac" ] && continue
@@ -499,18 +497,20 @@ cmd_clients() {
             processed_macs="${processed_macs} ${mac_low}"
             [ "$name" = "*" ] || [ -z "$name" ] && name="Thiết bị không tên"
 
-            local is_online=0
-            local conn_type=""
-            local sig_str=""
-            local time_str=""
-            local speed_str=""
             local icon="📱"
             echo "$name" | grep -qi "lap\|pc\|mac\|win\|desktop" && icon="💻"
-            echo "$name" | grep -qi "tv\|tivi\|sony\|lg\|samsung\|tcl\|panasonic" && icon="📺"
+            echo "$name" | grep -qi "tv\|tivi\|sony\|lg\|samsung\|tcl" && icon="📺"
             echo "$name" | grep -qi "cam\|ipcam\|imou\|ezviz" && icon="📷"
             echo "$name" | grep -qi "pad\|tab" && icon="📟"
+            echo "$name" | grep -qi "print\|epson\|canon\|hp" && icon="🖨"
 
-            # A. Kiểm tra sóng Wi-Fi (phần cứng xác thực 100%)
+            local is_online=0
+            local conn_type="Cáp Mạng LAN 🔌 (Cổng Switch)"
+            local time_str="Đang trực tuyến (Dây cáp LAN)"
+            local sig_str=""
+            local speed_str=""
+
+            # A. Kiểm tra sóng Wi-Fi thực tế
             local w_match=$(grep -i "^${mac_low}|" "$wifi_tmp" 2>/dev/null | head -n1)
             if [ -n "$w_match" ]; then
                 is_online=1
@@ -565,47 +565,46 @@ cmd_clients() {
                 fi
             fi
 
-            # Kiểm tra xem có đang bị chặn không
+            # Kiểm tra chặn
             local block_badge=""
             if [ -f "$TIMED_BLOCKS_FILE" ]; then
                 local b_match=$(grep -i "^${mac_low}|" "$TIMED_BLOCKS_FILE" 2>/dev/null | head -n1)
-                if [ -n "$b_match" ]; then
-                    block_badge=" [⛔ ĐANG BỊ CHẶN]"
-                fi
+                [ -n "$b_match" ] && block_badge=" [⛔ ĐANG BỊ CHẶN]"
             fi
 
-            # NẾU KHÔNG ONLINE VÀ KHÔNG BỊ CHẶN -> BỎ QUA HOÀN TOÀN!
+            # Bỏ qua nếu không online và không bị chặn
             if [ "$is_online" -eq 0 ] && [ -z "$block_badge" ]; then
                 continue
             fi
 
             count=$((count + 1))
             local mac_u=$(echo "$mac" | tr 'a-z' 'A-Z')
-            local m_ip=$(mask_ip "$ip")
-            local m_mac=$(mask_mac "$mac_u")
-            
-            local detail_block="   ├ 📍 IP: ${m_ip}
-   ├ 🔑 MAC: ${m_mac}
-   ├ 📡 Kết nối: <code>${conn_type}</code>
-   ├ ⏱ Bắt sóng: <code>${time_str}</code>"
-            [ -n "$sig_str" ] && detail_block="${detail_block}
-   ├ 📶 Tín hiệu: <code>${sig_str}</code>"
-            [ -n "$speed_str" ] && detail_block="${detail_block}
-   └ ⚡ Tốc độ: <code>${speed_str}</code>"
-            [ -z "$speed_str" ] && detail_block="${detail_block}
-   └ ⚡ Trạng thái: <code>Sẵn sàng truyền dữ liệu</code>"
 
-            printf "%d. %s <b>%s</b>%s\n%s\n---ENDCARD---\n" "$count" "$icon" "$name" "$block_badge" "$detail_block" >> "$cards_file"
+            # GHI NGUYÊN VẸN 1 KHỐI TIN NHẮN CHO THIẾT BỊ NÀY (ẨN TOÀN BỘ IP VÀ MAC)
+            cat << EOF > "$card_dir/card_${count}.txt"
+${count}. ${icon} <b>${name}</b>${block_badge}
+━━━━━━━━━━━━━━━━━━
+📍 <b>IP:</b> <tg-spoiler>${ip}</tg-spoiler>
+🔑 <b>MAC:</b> <tg-spoiler>${mac_u}</tg-spoiler>
+📡 <b>Kết nối:</b> <code>${conn_type}</code>
+⏱ <b>Bắt sóng:</b> <code>${time_str}</code>
+EOF
+            [ -n "$sig_str" ] && printf "📶 <b>Tín hiệu:</b> <code>%s</code>
+" "$sig_str" >> "$card_dir/card_${count}.txt"
+            [ -n "$speed_str" ] && printf "⚡ <b>Tốc độ:</b> <code>%s</code>
+" "$speed_str" >> "$card_dir/card_${count}.txt"
+            [ -z "$speed_str" ] && printf "⚡ <b>Trạng thái:</b> <code>Sẵn sàng truyền dữ liệu</code>
+" >> "$card_dir/card_${count}.txt"
         done < /tmp/dhcp.leases
     fi
 
-    # 2. Duyệt các thiết bị Wi-Fi dùng IP tĩnh (không có trong dhcp.leases)
+    # 2. Duyệt thiết bị IP tĩnh
     if [ -f "$wifi_tmp" ]; then
         while IFS='|' read -r sm_mac sm_ifc sm_sig sm_band sm_con sm_tx; do
             [ -z "$sm_mac" ] && continue
             if ! echo "$processed_macs" | grep -qi "$sm_mac"; then
                 processed_macs="${processed_macs} ${sm_mac}"
-                local s_ip=$(awk -v mac="$sm_mac" 'tolower($4)==tolower(mac) {print $1}' /proc/net/arp 2>/dev/null | head -n 1)
+                local s_ip=$(awk -v mac="$sm_mac" 'tolower($4)==mac {print $1}' /proc/net/arp 2>/dev/null | head -n 1)
                 [ -z "$s_ip" ] && s_ip="IP Tĩnh"
 
                 local conn_type="Wi-Fi 2.4GHz 📶 (Xuyên tường)"
@@ -630,16 +629,19 @@ cmd_clients() {
 
                 count=$((count + 1))
                 local sm_u=$(echo "$sm_mac" | tr 'a-z' 'A-Z')
-                local m_sip=$(mask_ip "$s_ip")
-                local m_smac=$(mask_mac "$sm_u")
-                local card_static="${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
-   ├ 📍 IP: ${m_sip}
-   ├ 🔑 MAC: ${m_smac}
-   ├ 📡 Kết nối: <code>${conn_type}</code>
-   ├ ⏱ Bắt sóng: <code>${time_str}</code>
-   ├ 📶 Tín hiệu: <code>${sig_str:-N/A}</code>
-   └ ⚡ Tốc độ: <code>${sm_tx:-N/A}</code>"
-                printf "%s\n---ENDCARD---\n" "$card_static" >> "$cards_file"
+
+                cat << EOF > "$card_dir/card_${count}.txt"
+${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
+━━━━━━━━━━━━━━━━━━
+📍 <b>IP:</b> <tg-spoiler>${s_ip}</tg-spoiler>
+🔑 <b>MAC:</b> <tg-spoiler>${sm_u}</tg-spoiler>
+📡 <b>Kết nối:</b> <code>${conn_type}</code>
+⏱ <b>Bắt sóng:</b> <code>${time_str}</code>
+EOF
+                [ -n "$sig_str" ] && printf "📶 <b>Tín hiệu:</b> <code>%s</code>
+" "$sig_str" >> "$card_dir/card_${count}.txt"
+                [ -n "$sm_tx" ] && printf "⚡ <b>Tốc độ:</b> <code>%s</code>
+" "$sm_tx" >> "$card_dir/card_${count}.txt"
             fi
         done < "$wifi_tmp"
     fi
@@ -649,23 +651,28 @@ cmd_clients() {
         send_msg "📱 <b>DANH SÁCH THIẾT BỊ ĐANG ONLINE (0 máy)</b>
 ━━━━━━━━━━━━━━━━━━
 <i>Hiện không có thiết bị nào đang kết nối sóng Wi-Fi hoặc cắm dây LAN.</i>" "$target_chat"
-        rm -f "$cards_file" 2>/dev/null || true
+        rm -rf "$card_dir" 2>/dev/null || true
         return 0
     fi
 
-    # Gửi Header thông báo tổng thể trước
+    # Gửi Header thông báo tổng quan trước
     send_msg "📱 <b>DANH SÁCH THIẾT BỊ ĐANG ONLINE (${count} máy)</b>
 ━━━━━━━━━━━━━━━━━━
-💡 <i>Chạm vào phần làm mờ của máy nào thì chỉ duy nhất máy đó hiện IP/MAC:</i>" "$target_chat"
+💡 <i>Chạm vào phần làm mờ của máy nào thì chỉ riêng máy đó hiện IP & MAC:</i>" "$target_chat"
+    sleep 0.2
 
-    # Gửi từng thẻ thiết bị độc lập (đảm bảo Telegram không tự ý mở hết các spoiler khác)
-    if [ -f "$cards_file" ]; then
-        awk -v RS='---ENDCARD---\n' 'NF {print $0}' "$cards_file" | while IFS= read -r card_entry; do
-            [ -n "$card_entry" ] && send_msg "$card_entry" "$target_chat"
-            sleep 0.1
-        done
-        rm -f "$cards_file" 2>/dev/null || true
-    fi
+    # Gửi TỪNG KHỐI TIN NHẮN THIẾT BỊ (Mỗi thiết bị là 1 tin nhắn card độc lập nguyên vẹn)
+    local i=1
+    while [ "$i" -le "$count" ]; do
+        local cf="$card_dir/card_${i}.txt"
+        if [ -f "$cf" ]; then
+            local card_body=$(cat "$cf")
+            send_msg "$card_body" "$target_chat"
+            sleep 0.2
+        fi
+        i=$((i + 1))
+    done
+    rm -rf "$card_dir" 2>/dev/null || true
 }
 
 # ─── CMD_TRAFFIC: BÁO CÁO ĐA CHU KỲ (NGÀY / 7 NGÀY / THÁNG / NĂM) ────────────

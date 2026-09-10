@@ -1084,40 +1084,48 @@ if [ "$ACTION" = "unblock" ] && [ -n "$MAC" ]; then
 fi
 
 # ==============================================================================
-# 6. GET REAL WIFI CONFIG
+# ==============================================================================
+# 6. GET REAL WIFI CONFIG (100% PHẦN CỨNG THỰC TẾ - KHÔNG DÙNG THÔNG TIN GIẢ MOCK)
 # ==============================================================================
 if [ "$ACTION" = "wifi_get" ]; then
-    ssid5=""
-    pass5=""
-    ch5=$(uci -q get wireless.radio0.channel || echo "149")
-    power5=$(uci -q get wireless.radio0.txpower || echo "20")
-
-    ssid24=""
-    pass24=""
-    ch24=$(uci -q get wireless.radio1.channel || echo "6")
-    power24=$(uci -q get wireless.radio1.txpower || echo "20")
-
-    # Xác định chính xác radio nào là 5G, radio nào là 2.4G theo kênh thực tế
-    if [ "$ch5" -le 14 ] 2>/dev/null && [ "$ch24" -gt 14 ] 2>/dev/null; then
-        tmp_ch="$ch5"; ch5="$ch24"; ch24="$tmp_ch"
-        tmp_p="$power5"; power5="$power24"; power24="$tmp_p"
-    fi
-
-    # Quét chính xác các section có mode='ap'
-    for iface in $(uci show wireless | grep "\.mode='ap'" | cut -d. -f1,2); do
-        dev=$(uci -q get ${iface}.device)
-        d_ch=$(uci -q get wireless.${dev}.channel || echo 6)
-        if [ "$d_ch" -gt 14 ] 2>/dev/null; then
-            [ -z "$ssid5" ] && ssid5=$(uci -q get ${iface}.ssid)
-            [ -z "$pass5" ] && pass5=$(uci -q get ${iface}.key)
-        else
-            [ -z "$ssid24" ] && ssid24=$(uci -q get ${iface}.ssid)
-            [ -z "$pass24" ] && pass24=$(uci -q get ${iface}.key)
+    # Xác định chính xác radio 5G và 2.4G theo chuẩn phần cứng OpenWrt
+    r_5g=""
+    r_24g=""
+    for r in radio0 radio1 radio2; do
+        b=$(uci -q get wireless.${r}.band)
+        if [ "$b" = "5g" ] || [ "$b" = "5GHz" ]; then
+            r_5g="$r"
+        elif [ "$b" = "2g" ] || [ "$b" = "2.4GHz" ]; then
+            r_24g="$r"
         fi
     done
+    [ -z "$r_5g" ] && r_5g="radio0"
+    [ -z "$r_24g" ] && r_24g="radio1"
 
-    [ -z "$ssid5" ] && ssid5="Xiaomi_5G"
-    [ -z "$ssid24" ] && ssid24="Xiaomi_2.4G"
+    # Tìm AP interface tương ứng cho từng radio
+    sec5=""
+    sec24=""
+    for iface in $(uci show wireless | grep "\.mode='ap'" | cut -d. -f1,2); do
+        dev=$(uci -q get ${iface}.device)
+        [ "$dev" = "$r_5g" ] && [ -z "$sec5" ] && sec5="$iface"
+        [ "$dev" = "$r_24g" ] && [ -z "$sec24" ] && sec24="$iface"
+    done
+    [ -z "$sec5" ] && sec5="wireless.default_${r_5g}"
+    [ -z "$sec24" ] && sec24="wireless.default_${r_24g}"
+
+    ssid5=$(uci -q get ${sec5}.ssid)
+    pass5=$(uci -q get ${sec5}.key)
+    ch5=$(uci -q get wireless.${r_5g}.channel || echo "auto")
+    power5=$(uci -q get wireless.${r_5g}.txpower)
+    [ -z "$power5" ] && power5=$(iwinfo phy0-ap0 info 2>/dev/null | awk '/Tx-Power:/{print $2}')
+    [ -z "$power5" ] && power5="20"
+
+    ssid24=$(uci -q get ${sec24}.ssid)
+    pass24=$(uci -q get ${sec24}.key)
+    ch24=$(uci -q get wireless.${r_24g}.channel || echo "6")
+    power24=$(uci -q get wireless.${r_24g}.txpower)
+    [ -z "$power24" ] && power24=$(iwinfo phy1-ap0 info 2>/dev/null | awk '/Tx-Power:/{print $2}')
+    [ -z "$power24" ] && power24="23"
 
     cat << EOF
 {
@@ -1149,46 +1157,48 @@ if [ "$ACTION" = "wifi_apply" ] || [ "$ACTION" = "wifi_apply_safe" ]; then
         [ -z "$PARAM_POWER5" ] && PARAM_POWER5=$(echo "$POST_BODY" | grep -o '"power5":"[^"]*"' | cut -d'"' -f4)
     fi
 
-    # Tìm radio 5G và 2.4G
-    r0_ch=$(uci -q get wireless.radio0.channel || echo 6)
-    if [ "$r0_ch" -gt 14 ] 2>/dev/null; then
-        radio_5g="radio0"
-        radio_24g="radio1"
-    else
-        radio_5g="radio1"
-        radio_24g="radio0"
-    fi
+    # Xác định đúng radio 5G và 2.4G
+    r_5g=""
+    r_24g=""
+    for r in radio0 radio1 radio2; do
+        b=$(uci -q get wireless.${r}.band)
+        if [ "$b" = "5g" ] || [ "$b" = "5GHz" ]; then r_5g="$r"
+        elif [ "$b" = "2g" ] || [ "$b" = "2.4GHz" ]; then r_24g="$r"
+        fi
+    done
+    [ -z "$r_5g" ] && r_5g="radio0"
+    [ -z "$r_24g" ] && r_24g="radio1"
 
     sec5=""
     sec24=""
     for iface in $(uci show wireless | grep "\.mode='ap'" | cut -d. -f1,2); do
         dev=$(uci -q get ${iface}.device)
-        [ "$dev" = "$radio_5g" ] && [ -z "$sec5" ] && sec5="$iface"
-        [ "$dev" = "$radio_24g" ] && [ -z "$sec24" ] && sec24="$iface"
+        [ "$dev" = "$r_5g" ] && [ -z "$sec5" ] && sec5="$iface"
+        [ "$dev" = "$r_24g" ] && [ -z "$sec24" ] && sec24="$iface"
     done
-
-    [ -z "$sec5" ] && sec5="wireless.default_${radio_5g}"
-    [ -z "$sec24" ] && sec24="wireless.default_${radio_24g}"
+    [ -z "$sec5" ] && sec5="wireless.default_${r_5g}"
+    [ -z "$sec24" ] && sec24="wireless.default_${r_24g}"
 
     [ -n "$PARAM_SSID5" ] && uci set ${sec5}.ssid="$PARAM_SSID5"
     if [ -n "$PARAM_PASS5" ]; then
         uci set ${sec5}.key="$PARAM_PASS5"
-        uci set ${sec5}.encryption="psk2"
+        uci set ${sec5}.encryption="psk2+ccmp"
     fi
-    [ -n "$PARAM_CH5" ] && uci set wireless.${radio_5g}.channel="$PARAM_CH5"
-    [ -n "$PARAM_POWER5" ] && uci set wireless.${radio_5g}.txpower="$PARAM_POWER5"
+    [ -n "$PARAM_CH5" ] && uci set wireless.${r_5g}.channel="$PARAM_CH5"
+    [ -n "$PARAM_POWER5" ] && uci set wireless.${r_5g}.txpower="$PARAM_POWER5"
 
     [ -n "$PARAM_SSID24" ] && uci set ${sec24}.ssid="$PARAM_SSID24"
     if [ -n "$PARAM_PASS24" ]; then
         uci set ${sec24}.key="$PARAM_PASS24"
-        uci set ${sec24}.encryption="psk2"
+        uci set ${sec24}.encryption="psk2+ccmp"
     fi
-    [ -n "$PARAM_CH24" ] && uci set wireless.${radio_24g}.channel="$PARAM_CH24"
-    [ -n "$PARAM_POWER24" ] && uci set wireless.${radio_24g}.txpower="$PARAM_POWER24"
+    [ -n "$PARAM_CH24" ] && uci set wireless.${r_24g}.channel="$PARAM_CH24"
+    [ -n "$PARAM_POWER24" ] && uci set wireless.${r_24g}.txpower="$PARAM_POWER24"
 
     uci commit wireless
 
-    printf '{"status":"ok","action":"wifi_apply","message":"Đã áp dụng cấu hình Wi-Fi mới thành công"}\n'
+    printf '{"status":"ok","action":"wifi_apply","message":"Đã áp dụng cấu hình Wi-Fi mới thành công"}
+'
     ( sleep 1; wifi reload ) >/dev/null 2>&1 &
     exit 0
 fi
@@ -1241,7 +1251,7 @@ if [ "$ACTION" = "wifi_scan" ]; then
         /Channel:/ { ch = int($NF); }
         /Signal:/ { sig = int($2); }
         /Encryption:/ {
-            sub(/^[ \t]*Encryption:[ \t]*/, "", $0);
+            sub(/^[ 	]*Encryption:[ 	]*/, "", $0);
             enc = $0;
         }
         END { flush_cell(); printf "]"; }
@@ -1264,10 +1274,10 @@ if [ "$ACTION" = "wifi_scan" ]; then
             flush_bss();
             bssid = $2; sub(/\(.*$/, "", bssid); ssid = ""; freq = 0; sig = -100; enc = "none";
         }
-        /^[ \t]*freq:/ { freq = int($2); }
-        /^[ \t]*signal:/ { sig = int($2); }
-        /^[ \t]*SSID:/ {
-            sub(/^[ \t]*SSID:[ \t]*/, "", $0);
+        /^[ 	]*freq:/ { freq = int($2); }
+        /^[ 	]*signal:/ { sig = int($2); }
+        /^[ 	]*SSID:/ {
+            sub(/^[ 	]*SSID:[ 	]*/, "", $0);
             ssid = $0;
         }
         /RSN:|WPA:/ { enc = "WPA2 PSK"; }
@@ -1276,12 +1286,13 @@ if [ "$ACTION" = "wifi_scan" ]; then
     fi
     [ -z "$networks_json" ] && networks_json="[]"
 
-    printf '{"status":"ok","band":"%s","interface":"%s","networks":%s}\n' "$scan_band" "$s_ifname" "$networks_json"
+    printf '{"status":"ok","band":"%s","interface":"%s","networks":%s}
+' "$scan_band" "$s_ifname" "$networks_json"
     exit 0
 fi
 
 # ==============================================================================
-# 7.2 WIFI CONNECT UPLINK (KẾT NỐI ROUTER LÀM WISP REPEATER NGUỒN MẠNG)
+# 7.2 WIFI CONNECT UPLINK (KIỂM TRA MẬT KHẨU NGAY LẬP TỨC - BÁO LỖI VÀ HOÀN TÁC NẾU SAI)
 # ==============================================================================
 if [ "$ACTION" = "wifi_connect_uplink" ]; then
     u_ssid="${PARAM_SSID:-$PARAM_SSID5}"
@@ -1294,12 +1305,24 @@ if [ "$ACTION" = "wifi_connect_uplink" ]; then
     [ -n "$POST_BODY" ] && [ -z "$PARAM_BAND" ] && u_band=$(echo "$POST_BODY" | grep -o '"band":"[^"]*"' | head -n1 | cut -d'"' -f4)
     [ -z "$u_band" ] && u_band="2.4g"
 
-    r0_ch=$(uci -q get wireless.radio0.channel || echo 6)
-    if [ "$u_band" = "5g" ]; then
-        [ "$r0_ch" -gt 14 ] 2>/dev/null && target_radio="radio0" || target_radio="radio1"
-    else
-        [ "$r0_ch" -le 14 ] 2>/dev/null && target_radio="radio0" || target_radio="radio1"
-    fi
+    # Sao lưu cấu hình wireless hiện tại trước khi thử kết nối
+    sta_bak="/tmp/vcrt_wireless_sta.bak"
+    cp -f /etc/config/wireless "$sta_bak" 2>/dev/null || true
+
+    # Xác định đúng radio 5G hoặc 2.4G
+    r_5g=""
+    r_24g=""
+    for r in radio0 radio1 radio2; do
+        b=$(uci -q get wireless.${r}.band)
+        if [ "$b" = "5g" ] || [ "$b" = "5GHz" ]; then r_5g="$r"
+        elif [ "$b" = "2g" ] || [ "$b" = "2.4GHz" ]; then r_24g="$r"
+        fi
+    done
+    [ -z "$r_5g" ] && r_5g="radio0"
+    [ -z "$r_24g" ] && r_24g="radio1"
+
+    target_radio="$r_24g"
+    [ "$u_band" = "5g" ] && target_radio="$r_5g"
 
     # 1. Cấu hình network.wwan nếu chưa có
     if ! uci -q get network.wwan >/dev/null; then
@@ -1319,7 +1342,7 @@ if [ "$ACTION" = "wifi_connect_uplink" ]; then
         fi
     fi
 
-    # 3. Xóa các cấu hình STA cũ để tránh xung đột
+    # 3. Xóa các section STA cũ
     for s in $(uci show wireless | grep "\.mode='sta'" | cut -d. -f1,2); do
         uci delete $s
     done
@@ -1338,8 +1361,76 @@ if [ "$ACTION" = "wifi_connect_uplink" ]; then
     fi
     uci commit wireless
 
-    printf '{"status":"ok","message":"Đã cấu hình Wi-Fi Uplink tới %s. Đang khởi động lại mạng..."}\n' "$u_ssid"
-    ( sleep 1; wifi reload; sleep 2; ifup wwan ) >/dev/null 2>&1 &
+    # Kích hoạt thử nghiệm kết nối
+    wifi reload >/dev/null 2>&1
+    sleep 1
+    ifup wwan >/dev/null 2>&1
+
+    # Tìm interface name của trạm thu STA (e.g. phy0-sta0, phy1-sta0, wlan0-sta, ...)
+    sta_iface=""
+    connected=0
+    auth_failed=0
+
+    # Chờ kiểm tra trạng thái trong tối đa 7 giây
+    i=0
+    while [ "$i" -lt 7 ]; do
+        sleep 1
+        i=$((i + 1))
+
+        # 1. Kiểm tra logread xem có báo sai mật khẩu (4-way handshake failed)
+        if logread 2>/dev/null | tail -n 40 | grep -qiE "4-Way Handshake failed|pre-shared key may be incorrect|wrong key|MIC failure"; then
+            auth_failed=1
+            break
+        fi
+
+        # 2. Tìm tên interface STA nếu chưa có
+        if [ -z "$sta_iface" ]; then
+            for cand in $(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}'); do
+                case "$cand" in *sta*) sta_iface="$cand"; break ;; esac
+            done
+        fi
+
+        # 3. Kiểm tra kết nối qua iw link
+        if [ -n "$sta_iface" ]; then
+            link_out=$(iw dev "$sta_iface" link 2>/dev/null)
+            if echo "$link_out" | grep -q "Connected to"; then
+                connected=1
+                break
+            fi
+        fi
+
+        # 4. Kiểm tra ubus wwan
+        if ubus call network.interface.wwan status 2>/dev/null | grep -q '"up": true'; then
+            connected=1
+            break
+        fi
+    done
+
+    # Nếu SAI MẬT KHẨU hoặc HẾT GIỜ MÀ KHÔNG KẾT NỐI ĐƯỢC -> HOÀN TÁC NGAY LẬP TỨC!
+    if [ "$auth_failed" -eq 1 ] || [ "$connected" -eq 0 ]; then
+        if [ -f "$sta_bak" ]; then
+            cp -f "$sta_bak" /etc/config/wireless 2>/dev/null || true
+            uci commit wireless
+            wifi reload >/dev/null 2>&1
+            sleep 1
+            ifup wwan >/dev/null 2>&1
+            rm -f "$sta_bak" 2>/dev/null || true
+        fi
+
+        if [ "$auth_failed" -eq 1 ]; then
+            printf '{"status":"error","message":"Mật khẩu Wi-Fi không chính xác! Không thể xác thực 4-Way Handshake. Router đã tự động giữ nguyên cấu hình cũ."}
+'
+        else
+            printf '{"status":"error","message":"Không thể kết nối tới Wi-Fi %s (Mật khẩu có thể sai hoặc sóng quá yếu). Router đã tự động giữ nguyên cấu hình cũ."}
+' "$u_ssid"
+        fi
+        exit 0
+    fi
+
+    # NẾU KẾT NỐI THÀNH CÔNG -> GIỮ CẤU HÌNH MỚI!
+    rm -f "$sta_bak" 2>/dev/null || true
+    printf '{"status":"ok","message":"Đã kết nối thành công tới Wi-Fi %s!"}
+' "$u_ssid"
     exit 0
 fi
 
