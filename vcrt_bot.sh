@@ -1,9 +1,8 @@
 #!/bin/sh
 export PATH="/usr/sbin:/usr/bin:/sbin:/bin:$PATH"
 # ==============================================================================
-# VCRT OS - BACKGROUND TELEGRAM BOT & NOTIFICATION DAEMON
-# Tự động thông báo thiết bị mới, hết hạn chặn mạng, lưu lượng định kỳ
-# Hoạt động 24/7 trên OpenWrt độc lập, không phụ thuộc vào Web Dashboard
+# VCRT OS - CYBERPUNK TELEGRAM BOT & NOTIFICATION DAEMON (24/7)
+# Giám sát thiết bị thực tế, đo đạc lưu lượng chính xác, tự động mở mạng
 # ==============================================================================
 
 VCRT_CONF_DIR="${VCRT_CONF_DIR:-/etc/vcrt}"
@@ -18,6 +17,8 @@ REPORTED_DATE_FILE="/tmp/vcrt_reported_date.tmp"
 
 mkdir -p "$VCRT_CONF_DIR" /tmp 2>/dev/null
 
+KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traffic"},{"text":"/wifi"}],[{"text":"/ping"},{"text":"/help"}]],"resize_keyboard":true,"persistent":true}'
+
 load_config() {
     BOT_ENABLED=0
     BOT_TOKEN=""
@@ -28,7 +29,6 @@ load_config() {
     DAILY_REPORT_HOUR=20
 
     if [ -f "$CONF_FILE" ]; then
-        # POSIX safe key-value parsing
         while IFS='=' read -r key val; do
             case "$key" in
                 BOT_ENABLED|bot_enabled) BOT_ENABLED=$(echo "$val" | tr -d ' \r\n"') ;;
@@ -50,6 +50,7 @@ send_msg() {
     curl -s --max-time 10 -X POST "$api_url" \
         -d "chat_id=${CHAT_ID}" \
         -d "parse_mode=HTML" \
+        -d "reply_markup=${KEYBOARD}" \
         --data-urlencode "text=${text}" >/dev/null 2>&1 || true
 }
 
@@ -63,7 +64,6 @@ watch_wifi_devices() {
         [ "$NOTIF_WIFI_JOIN" != "1" ] && continue
         [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ] && continue
 
-        # Quét MAC các máy đang liên kết sóng Wi-Fi thực tế
         local curr_macs=""
         for wif in $(iw dev 2>/dev/null | awk '/Interface/{print $2}'); do
             case "$wif" in *sta*) continue ;; esac
@@ -75,7 +75,6 @@ watch_wifi_devices() {
         if [ -n "$last_macs" ]; then
             for m in $curr_macs; do
                 if ! echo "$last_macs" | grep -qi "$m"; then
-                    # Thiết bị mới xuất hiện! Đợi 1 giây để DHCP cấp IP
                     sleep 1
                     local mac_up=$(echo "$m" | tr '[:lower:]' '[:upper:]')
                     local ip=$(awk -v mac="$m" 'tolower($2)==tolower(mac) {print $3}' /tmp/dhcp.leases 2>/dev/null | head -n 1)
@@ -85,22 +84,26 @@ watch_wifi_devices() {
                     [ "$name" = "*" ] || [ -z "$name" ] && name="Thiết bị không tên"
 
                     local band="Wi-Fi"
+                    local sig=""
                     if iw dev phy0-ap0 station dump 2>/dev/null | grep -qi "$m"; then
-                        band="Wi-Fi 5GHz ⚡ (Tốc độ cao)"
+                        band="5GHz ⚡ (Tốc độ cao)"
+                        sig=$(iw dev phy0-ap0 station get "$m" 2>/dev/null | awk '/signal:/{print $2, $3}')
                     elif iw dev phy1-ap0 station dump 2>/dev/null | grep -qi "$m"; then
-                        band="Wi-Fi 2.4GHz 📶 (Xuyên tường)"
+                        band="2.4GHz 📶 (Xuyên tường)"
+                        sig=$(iw dev phy1-ap0 station get "$m" 2>/dev/null | awk '/signal:/{print $2, $3}')
                     fi
+                    [ -n "$sig" ] && band="${band} · Tín hiệu: ${sig}"
 
                     local now_str=$(date +'%H:%M:%S - %d/%m/%Y' 2>/dev/null || echo "")
-                    local alert_msg="🔔 <b>THIẾT BỊ MỚI KẾT NỐI WI-FI!</b>
-━━━━━━━━━━━━━━━━━
+                    local alert_msg="🔔 <b>THIẾT BỊ VỪA KẾT NỐI WI-FI!</b>
+━━━━━━━━━━━━━━━━━━
 📱 <b>Tên máy:</b> <code>${name}</code>
 📍 <b>Địa chỉ IP:</b> <code>${ip}</code>
 🔑 <b>Địa chỉ MAC:</b> <code>${mac_up}</code>
 📡 <b>Băng tần:</b> <code>${band}</code>
 ⏰ <b>Thời gian:</b> <code>${now_str}</code>
-━━━━━━━━━━━━━━━━━
-<i>Thông báo tự động từ router VCRT OS</i>"
+━━━━━━━━━━━━━━━━━━
+<i>Gõ /clients để xem danh sách máy online</i>"
                     send_msg "$alert_msg"
                 fi
             done
@@ -125,7 +128,6 @@ watch_block_timers() {
         while IFS='|' read -r b_mac b_type b_start b_expire b_dur b_name b_ip; do
             [ -z "$b_mac" ] && continue
             if [ "$b_expire" -gt 0 ] && [ "$now_epoch" -ge "$b_expire" ] 2>/dev/null; then
-                # HẾT GIỜ: Tự động gỡ bỏ chặn trong Firewall iptables
                 iptables -D FORWARD -m mac --mac-source "$b_mac" -j DROP 2>/dev/null || true
                 iptables -D INPUT -m mac --mac-source "$b_mac" -j DROP 2>/dev/null || true
                 grep -v -i "$b_mac" "$BLOCKED_SOFT_FILE" > "${BLOCKED_SOFT_FILE}.tmp" 2>/dev/null || true
@@ -138,11 +140,11 @@ watch_block_timers() {
                 if [ "$BOT_ENABLED" = "1" ] && [ "$NOTIF_BLOCK_EXPIRE" = "1" ]; then
                     [ -z "$b_name" ] && b_name="Thiết bị"
                     local unblock_msg="🎉 <b>ĐÃ HẾT GIỜ NGẮT KẾT NỐI!</b>
-━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
 📱 <b>Thiết bị:</b> <code>${b_name}</code>
 📍 <b>Địa chỉ IP:</b> <code>${b_ip}</code>
 🔑 <b>Địa chỉ MAC:</b> <code>${b_mac}</code>
-━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
 <i>Router đã tự động khôi phục toàn bộ quyền truy cập Internet!</i>"
                     send_msg "$unblock_msg"
                 fi
@@ -163,13 +165,11 @@ watch_block_timers() {
 record_traffic_periodically() {
     while true; do
         sleep 60
-        # Tìm cổng mạng WAN chính
         local def_dev=$(ip route 2>/dev/null | awk '/^default/{print $5}' | head -n 1)
         [ -z "$def_dev" ] && def_dev=$(route -n 2>/dev/null | awk '/^0.0.0.0/{print $8}' | head -n 1)
         [ -z "$def_dev" ] && def_dev="eth0.2"
 
-        local cur_rx=0
-        local cur_tx=0
+        local cur_rx=0; local cur_tx=0
         if [ -n "$def_dev" ] && grep -q "${def_dev}:" /proc/net/dev 2>/dev/null; then
             cur_rx=$(awk -v ifn="${def_dev}:" '$1==ifn {print $2}' /proc/net/dev 2>/dev/null || echo 0)
             cur_tx=$(awk -v ifn="${def_dev}:" '$1==ifn {print $10}' /proc/net/dev 2>/dev/null || echo 0)
@@ -183,8 +183,7 @@ record_traffic_periodically() {
         local today_date=$(date +%Y-%m-%d 2>/dev/null || echo "2026-09-10")
         local today_hour=$(date +%H 2>/dev/null || echo "15")
 
-        local delta_rx=0
-        local delta_tx=0
+        local delta_rx=0; local delta_tx=0
         if [ -f "$PREV_BYTES_FILE" ]; then
             read -r p_rx p_tx < "$PREV_BYTES_FILE" 2>/dev/null
             case "$p_rx" in ''|*[!0-9]*) p_rx=0 ;; esac
@@ -205,7 +204,6 @@ record_traffic_periodically() {
         echo "$cur_rx $cur_tx" > "$PREV_BYTES_FILE" 2>/dev/null
 
         if [ "$delta_rx" -gt 0 ] 2>/dev/null || [ "$delta_tx" -gt 0 ] 2>/dev/null; then
-            # 1. Cập nhật daily_db
             if grep -q "^${today_date}|" "$DAILY_DB" 2>/dev/null; then
                 awk -F'|' -v cur_d="$today_date" -v drx="$delta_rx" -v dtx="$delta_tx" '
                 $1 == cur_d { printf "%s|%d|%d\n", $1, $2 + drx, $3 + dtx; next; }
@@ -215,7 +213,6 @@ record_traffic_periodically() {
                 echo "${today_date}|${delta_rx}|${delta_tx}" >> "$DAILY_DB" 2>/dev/null
             fi
 
-            # 2. Cập nhật hourly_db
             local cur_h_key="${today_date} ${today_hour}"
             if grep -q "^${cur_h_key}|" "$HOURLY_DB" 2>/dev/null; then
                 awk -F'[ |]' -v cur_k="$cur_h_key" -v drx="$delta_rx" -v dtx="$delta_tx" '
@@ -227,12 +224,12 @@ record_traffic_periodically() {
             fi
         fi
 
-        # Giữ file hourly nhỏ gọn (tối đa 120 dòng gần nhất)
+        # Giữ file hourly tối đa 100 dòng
         if [ -f "$HOURLY_DB" ] && [ $(wc -l < "$HOURLY_DB" 2>/dev/null || echo 0) -gt 150 ]; then
             tail -n 100 "$HOURLY_DB" > "${HOURLY_DB}.tmp" 2>/dev/null && mv -f "${HOURLY_DB}.tmp" "$HOURLY_DB"
         fi
 
-        # ─── WATCHER 4: BÁO CÁO LƯU LƯỢNG HÀNG NGÀY (DAILY REPORT) ───────────
+        # ─── WATCHER 4: BÁO CÁO ĐỊNH KỲ HÀNG NGÀY ─────────────────────────────
         load_config
         if [ "$BOT_ENABLED" = "1" ] && [ "$NOTIF_DAILY_REPORT" = "1" ]; then
             local cur_h_num=$(echo "$today_hour" | awk '{print int($1)}')
@@ -242,11 +239,9 @@ record_traffic_periodically() {
                 [ -f "$REPORTED_DATE_FILE" ] && read -r last_rep < "$REPORTED_DATE_FILE" 2>/dev/null
                 if [ "$last_rep" != "$today_date" ]; then
                     local t_line=$(grep "^${today_date}|" "$DAILY_DB" 2>/dev/null | tail -n 1)
-                    local r_b=0
-                    local t_b=0
+                    local r_b=0; local t_b=0
                     if [ -n "$t_line" ]; then
-                        r_b=$(echo "$t_line" | cut -d'|' -f2)
-                        t_b=$(echo "$t_line" | cut -d'|' -f3)
+                        r_b=$(echo "$t_line" | cut -d'|' -f2); t_b=$(echo "$t_line" | cut -d'|' -f3)
                     fi
                     local fmt_res=$(awk -v r="$r_b" -v t="$t_b" '
                     function fmt(b) {
@@ -259,15 +254,21 @@ record_traffic_periodically() {
                     local dl_str=$(echo "$fmt_res" | cut -d'|' -f1)
                     local ul_str=$(echo "$fmt_res" | cut -d'|' -f2)
                     local tot_str=$(echo "$fmt_res" | cut -d'|' -f3)
-                    local dev_count=$(wc -l < /tmp/dhcp.leases 2>/dev/null || echo 0)
+
+                    # Lấy số máy online thực tế
+                    local real_online=$(iw dev 2>/dev/null | awk '/Interface/{print $2}' | while read -r w; do
+                        [ "$w" = "phy0-sta0" ] && continue
+                        iw dev "$w" station dump 2>/dev/null | awk '/Station/{print $2}'
+                    done | sort -u | wc -l)
+                    [ -z "$real_online" ] && real_online=0
 
                     local rep_msg="📊 <b>BÁO CÁO LƯU LƯỢNG HÔM NAY (${today_date})</b>
-━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
 📥 <b>Tải về (DL):</b> <code>${dl_str}</code>
 📤 <b>Tải lên (UL):</b> <code>${ul_str}</code>
 📦 <b>Tổng lưu lượng:</b> <code>${tot_str}</code>
-📱 <b>Thiết bị DHCP:</b> <code>${dev_count} máy</code>
-━━━━━━━━━━━━━━━━━
+📱 <b>Thiết bị đang online:</b> <code>${real_online} máy</code>
+━━━━━━━━━━━━━━━━━━
 <i>Báo cáo định kỳ lúc ${DAILY_REPORT_HOUR}:00 từ router VCRT OS</i>"
                     send_msg "$rep_msg"
                     echo "$today_date" > "$REPORTED_DATE_FILE" 2>/dev/null
@@ -284,7 +285,10 @@ cmd_status() {
     local days=$((up_sec / 86400))
     local hours=$(( (up_sec % 86400) / 3600 ))
     local mins=$(( (up_sec % 3600) / 60 ))
-    local up_str="${days}d ${hours}h ${mins}m"
+    local up_str=""
+    [ "$days" -gt 0 ] && up_str="${days} ngày "
+    up_str="${up_str}${hours} giờ ${mins} phút"
+
     local load=$(cut -d' ' -f1-3 /proc/loadavg 2>/dev/null || echo "0.0")
 
     local mem_total=$(awk '/MemTotal/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo 128)
@@ -292,130 +296,401 @@ cmd_status() {
     local mem_used=$((mem_total - mem_avail))
     local mem_pct=$((mem_used * 100 / mem_total))
 
+    # CPU bar visualization
+    local cpu_blocks=""
+    local b_idx=0
+    local load_num=$(echo "$load" | awk '{print int($1*25)}')
+    [ "$load_num" -gt 100 ] && load_num=100
+    local filled=$(( load_num / 10 ))
+    while [ "$b_idx" -lt 10 ]; do
+        if [ "$b_idx" -lt "$filled" ]; then
+            cpu_blocks="${cpu_blocks}■"
+        else
+            cpu_blocks="${cpu_blocks}□"
+        fi
+        b_idx=$(( b_idx + 1 ))
+    done
+
+    local rom_used=$(df -h /overlay 2>/dev/null | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')
+    [ -z "$rom_used" ] && rom_used=$(df -h / 2>/dev/null | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')
+
     local wan_ip=$(ip -4 addr show eth0.2 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n 1)
-    [ -z "$wan_ip" ] && wan_ip=$(curl -s --max-time 3 https://api.ipify.org 2>/dev/null || echo "N/A")
+    [ -z "$wan_ip" ] && wan_ip=$(ip -4 addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n 1)
+    [ -z "$wan_ip" ] && wan_ip=$(curl -s --max-time 2 https://api.ipify.org 2>/dev/null || echo "192.168.10.x")
 
-    local dev_cnt=$(wc -l < /tmp/dhcp.leases 2>/dev/null || echo 0)
+    # Đếm số thiết bị online THỰC TẾ
+    local wifi_5g_stas=$(iw dev phy0-ap0 station dump 2>/dev/null | awk '/Station/{print tolower($2)}')
+    local wifi_24g_stas=$(iw dev phy1-ap0 station dump 2>/dev/null | awk '/Station/{print tolower($2)}')
+    local wifi_count=$(echo "$wifi_5g_stas $wifi_24g_stas" | tr ' ' '\n' | grep -E '^[0-9a-f]{2}:' | sort -u | wc -l)
 
-    local msg="📡 <b>TRẠNG THÁI ROUTER ${host}</b>
-━━━━━━━━━━━━━━━━━
-⏱ <b>Uptime:</b> <code>${up_str}</code>
-⚙️ <b>CPU Load:</b> <code>${load}</code>
-💾 <b>RAM:</b> <code>${mem_used}MB / ${mem_total}MB (${mem_pct}%)</code>
-🌐 <b>WAN IP:</b> <code>${wan_ip}</code>
-📱 <b>Thiết bị kết nối:</b> <code>${dev_cnt} máy</code>
-━━━━━━━━━━━━━━━━━
-<i>Gõ /traffic để xem dung lượng hoặc /clients để xem danh sách máy</i>"
+    local lan_count=0
+    local lan_carrier=$(cat /sys/class/net/eth0/carrier 2>/dev/null || echo 0)
+    if [ "$lan_carrier" = "1" ]; then
+        lan_count=$(awk '$3=="0x2" && $6=="br-lan" {print $4}' /proc/net/arp 2>/dev/null | sort -u | wc -l)
+    fi
+    local online_total=$(( wifi_count + lan_count ))
+
+    local ch_2g=$(uci -q get wireless.radio1.channel || echo "6")
+    local ch_5g=$(uci -q get wireless.radio0.channel || echo "149")
+
+    local msg="⚡ <b>VCRT OS · BẢNG ĐIỀU KHIỂN ROUTER</b>
+━━━━━━━━━━━━━━━━━━
+🏷 <b>Thiết bị:</b> <code>Xiaomi MiWiFi Mini (MT7620A)</code>
+⏱ <b>Thời gian chạy:</b> <code>${up_str}</code>
+⚙️ <b>CPU Load:</b> <code>${load}</code> [${cpu_blocks}]
+💾 <b>Bộ nhớ RAM:</b> <code>${mem_used}MB / ${mem_total}MB (${mem_pct}%)</code>
+💿 <b>Bộ nhớ Flash:</b> <code>${rom_used}</code>
+🌐 <b>Địa chỉ WAN:</b> <code>${wan_ip}</code>
+📶 <b>Wi-Fi Kênh:</b> <code>2.4G (CH ${ch_2g}) · 5G (CH ${ch_5g})</code>
+👥 <b>Thiết bị ĐANG ONLINE:</b> <code>${online_total} máy</code>
+━━━━━━━━━━━━━━━━━━
+<i>Gõ /clients để xem chi tiết danh sách máy online</i>"
     send_msg "$msg"
 }
 
-cmd_traffic() {
-    local today_date=$(date +%Y-%m-%d 2>/dev/null || echo "")
-    local t_line=$(grep "^${today_date}|" "$DAILY_DB" 2>/dev/null | tail -n 1)
-    local tod_rx=0; local tod_tx=0
-    if [ -n "$t_line" ]; then
-        tod_rx=$(echo "$t_line" | cut -d'|' -f2)
-        tod_tx=$(echo "$t_line" | cut -d'|' -f3)
+# ─── CMD_CLIENTS: 100% ONLINE THỰC TẾ (LỌC BỎ HOÀN TOÀN MÁY ĐÃ NGẮT KẾT NỐI) ──
+cmd_clients() {
+    local wifi_dump_5g=$(iw dev phy0-ap0 station dump 2>/dev/null)
+    local wifi_dump_24g=$(iw dev phy1-ap0 station dump 2>/dev/null)
+    local arp_data=$(cat /proc/net/arp 2>/dev/null)
+
+    local lan_ports_up=0
+    [ "$(cat /sys/class/net/eth0/carrier 2>/dev/null)" = "1" ] && lan_ports_up=1
+    if command -v swconfig >/dev/null 2>&1; then
+        local p0=$(swconfig dev switch0 port 0 get link 2>/dev/null)
+        local p1=$(swconfig dev switch0 port 1 get link 2>/dev/null)
+        echo "$p0 $p1" | grep -q "link:up" && lan_ports_up=1
     fi
 
-    local sum_7d_rx=0; local sum_7d_tx=0
-    local sum_m_rx=0; local sum_m_tx=0
-    local cur_ym=$(date +%Y-%m 2>/dev/null || echo "")
+    local dev_entries=""
+    local count=0
+    local processed_macs=""
 
+    # 1. Duyệt từ bảng DHCP Leases
+    if [ -f /tmp/dhcp.leases ] && [ -s /tmp/dhcp.leases ]; then
+        while read -r ltime mac ip name clid; do
+            [ -z "$mac" ] && continue
+            local mac_low=$(echo "$mac" | tr 'A-Z' 'a-z')
+            processed_macs="${processed_macs} ${mac_low}"
+            [ "$name" = "*" ] || [ -z "$name" ] && name="Thiết bị không tên"
+
+            local is_online=0
+            local band=""
+            local sig_info=""
+            local icon="📱"
+            echo "$name" | grep -qi "lap\|pc\|mac\|win\|desktop" && icon="💻"
+            echo "$name" | grep -qi "tv\|tivi\|sony\|lg\|samsung\|tcl" && icon="📺"
+            echo "$name" | grep -qi "cam\|ipcam\|imou\|ezviz" && icon="📷"
+            echo "$name" | grep -qi "pad\|tab" && icon="📟"
+
+            # Kiểm tra Wi-Fi 5GHz
+            if echo "$wifi_dump_5g" | grep -qi "$mac_low"; then
+                is_online=1
+                band="5GHz ⚡"
+                local st=$(iw dev phy0-ap0 station get "$mac_low" 2>/dev/null)
+                local s=$(echo "$st" | awk '/signal:/{print $2, $3}')
+                [ -n "$s" ] && sig_info=" · Sóng: <code>${s}</code>"
+
+            # Kiểm tra Wi-Fi 2.4GHz
+            elif echo "$wifi_dump_24g" | grep -qi "$mac_low"; then
+                is_online=1
+                band="2.4GHz 📶"
+                local st=$(iw dev phy1-ap0 station get "$mac_low" 2>/dev/null)
+                local s=$(echo "$st" | awk '/signal:/{print $2, $3}')
+                [ -n "$s" ] && sig_info=" · Sóng: <code>${s}</code>"
+
+            # Kiểm tra Cáp LAN cắm dây
+            elif [ "$lan_ports_up" -eq 1 ]; then
+                local a_ent=$(echo "$arp_data" | grep -i "$mac_low" | head -n1)
+                local a_flg=$(echo "$a_ent" | awk '{print $3}')
+                local a_dev=$(echo "$a_ent" | awk '{print $6}')
+                if [ "$a_flg" = "0x2" ] && [ "$a_dev" = "br-lan" ]; then
+                    is_online=1
+                    band="Cáp LAN 🔌 (100M)"
+                    icon="💻"
+                fi
+            fi
+
+            # Kiểm tra xem có đang bị chặn không
+            local block_badge=""
+            if [ -f "$TIMED_BLOCKS_FILE" ]; then
+                local b_match=$(grep -i "^${mac_low}|" "$TIMED_BLOCKS_FILE" | head -n1)
+                if [ -n "$b_match" ]; then
+                    block_badge=" [⛔ ĐANG BỊ CHẶN]"
+                fi
+            fi
+
+            # NẾU KHÔNG ONLINE VÀ KHÔNG BỊ CHẶN -> BỎ QUA HOÀN TOÀN!
+            if [ "$is_online" -eq 0 ] && [ -z "$block_badge" ]; then
+                continue
+            fi
+
+            count=$((count + 1))
+            local mac_u=$(echo "$mac" | tr '[:lower:]' '[:upper:]')
+            dev_entries="${dev_entries}${count}. ${icon} <b>${name}</b>${block_badge}
+   ├ 📍 IP: <code>${ip}</code>
+   ├ 🔑 MAC: <code>${mac_u}</code>
+   └ 📡 Kết nối: <code>${band}</code>${sig_info}
+"
+        done < /tmp/dhcp.leases
+    fi
+
+    # 2. Duyệt các thiết bị Wi-Fi dùng IP tĩnh (không có trong dhcp.leases)
+    for wif_dev in phy0-ap0 phy1-ap0; do
+        local stas=$(iw dev "$wif_dev" station dump 2>/dev/null | awk '/Station/{print tolower($2)}')
+        for sm in $stas; do
+            if ! echo "$processed_macs" | grep -qi "$sm"; then
+                processed_macs="${processed_macs} ${sm}"
+                local s_ip=$(awk -v mac="$sm" 'tolower($4)==tolower(mac) {print $1}' /proc/net/arp 2>/dev/null | head -n 1)
+                [ -z "$s_ip" ] && s_ip="IP Tĩnh"
+
+                local band="Wi-Fi 5GHz ⚡"
+                [ "$wif_dev" = "phy1-ap0" ] && band="Wi-Fi 2.4GHz 📶"
+                local st=$(iw dev "$wif_dev" station get "$sm" 2>/dev/null)
+                local s=$(echo "$st" | awk '/signal:/{print $2, $3}')
+                local sig_info=""
+                [ -n "$s" ] && sig_info=" · Sóng: <code>${s}</code>"
+
+                count=$((count + 1))
+                local sm_u=$(echo "$sm" | tr '[:lower:]' '[:upper:]')
+                dev_entries="${dev_entries}${count}. 📱 <b>Thiết bị Wi-Fi (${s_ip})</b>
+   ├ 📍 IP: <code>${s_ip}</code>
+   ├ 🔑 MAC: <code>${sm_u}</code>
+   └ 📡 Kết nối: <code>${band}</code>${sig_info}
+"
+            fi
+        done
+    done
+
+    local header="📱 <b>DANH SÁCH THIẾT BỊ ĐANG ONLINE (${count} máy)</b>
+━━━━━━━━━━━━━━━━━━
+"
+    if [ "$count" -eq 0 ]; then
+        dev_entries="<i>Hiện không có thiết bị nào đang kết nối sóng Wi-Fi hoặc cắm dây LAN.</i>
+"
+    fi
+
+    local footer="━━━━━━━━━━━━━━━━━━
+<i>Gõ /block &lt;mac&gt; [phút] để ngắt kết nối máy bất kỳ</i>"
+    send_msg "${header}${dev_entries}${footer}"
+}
+
+# ─── CMD_TRAFFIC: BÁO CÁO ĐA CHU KỲ (NGÀY / 7 NGÀY / THÁNG / NĂM) ────────────
+cmd_traffic() {
+    local today_date=$(date +%Y-%m-%d 2>/dev/null || echo "2026-09-10")
+    local cur_year=$(date +%Y 2>/dev/null || echo "2026")
+    local cur_month=$(date +%m 2>/dev/null || echo "09")
+
+    # Lấy số liệu từ database
+    local out=$(awk \
+    -v daily_file="$DAILY_DB" \
+    -v cur_date="$today_date" \
+    -v cur_year="$cur_year" \
+    -v cur_month="$cur_month" \
+    'function fmt(b) {
+        if (b >= 1073741824) return sprintf("%.2f GB", b/1073741824);
+        if (b >= 1048576) return sprintf("%.1f MB", b/1048576);
+        return sprintf("%.1f KB", b/1024);
+    }
+    BEGIN { FS = "|"; }
+    FILENAME == daily_file {
+        d = $1; split(d, dt, "-");
+        y = dt[1] + 0; m = dt[2] + 0;
+        r = $2 + 0; t = $3 + 0;
+        d_rx[d] = r; d_tx[d] = t;
+        if (y == (cur_year + 0) && m == (cur_month + 0)) {
+            m_rx += r; m_tx += t;
+        }
+        if (y == (cur_year + 0)) {
+            y_rx += r; y_tx += t;
+        }
+    }
+    END {
+        tr = d_rx[cur_date] + 0; tt = d_tx[cur_date] + 0;
+        printf "%s|%s|%s\n", fmt(tr), fmt(tt), fmt(tr+tt);
+        printf "%s|%s|%s\n", fmt(m_rx), fmt(m_tx), fmt(m_rx+m_tx);
+        printf "%s|%s|%s\n", fmt(y_rx), fmt(y_tx), fmt(y_rx+y_tx);
+    }' "$DAILY_DB" 2>/dev/null)
+
+    # 7 ngày gần nhất
+    local sum_7d_rx=0; local sum_7d_tx=0
     if [ -f "$DAILY_DB" ]; then
-        # 7 ngày gần nhất
-        local d7=$(tail -n 7 "$DAILY_DB")
+        local d7=$(tail -n 7 "$DAILY_DB" 2>/dev/null)
         for l in $d7; do
             r=$(echo "$l" | cut -d'|' -f2); t=$(echo "$l" | cut -d'|' -f3)
             sum_7d_rx=$(( sum_7d_rx + r )); sum_7d_tx=$(( sum_7d_tx + t ))
         done
-
-        # Tháng này
-        while IFS='|' read -r d r t; do
-            case "$d" in
-                ${cur_ym}*)
-                    sum_m_rx=$(( sum_m_rx + r )); sum_m_tx=$(( sum_m_tx + t ))
-                    ;;
-            esac
-        done < "$DAILY_DB"
     fi
-
-    local out_str=$(awk -v tr="$tod_rx" -v tt="$tod_tx" -v sr7="$sum_7d_rx" -v st7="$sum_7d_tx" -v mr="$sum_m_rx" -v mt="$sum_m_tx" '
+    local s7_fmt=$(awk -v r="$sum_7d_rx" -v t="$sum_7d_tx" '
     function fmt(b) {
         if (b >= 1073741824) return sprintf("%.2f GB", b/1073741824);
         if (b >= 1048576) return sprintf("%.1f MB", b/1048576);
         return sprintf("%.1f KB", b/1024);
     }
-    BEGIN {
-        printf "%s|%s\n", fmt(tr), fmt(tr+tt);
-        printf "%s|%s\n", fmt(sr7), fmt(sr7+st7);
-        printf "%s|%s\n", fmt(mr), fmt(mr+mt);
-    }')
+    BEGIN { printf "%s|%s|%s\n", fmt(r), fmt(t), fmt(r+t); }
+    ')
 
-    local tod_str=$(echo "$out_str" | sed -n '1p')
-    local s7_str=$(echo "$out_str" | sed -n '2p')
-    local sm_str=$(echo "$out_str" | sed -n '3p')
+    local tod_line=$(echo "$out" | sed -n '1p')
+    local mon_line=$(echo "$out" | sed -n '2p')
+    local yr_line=$(echo "$out" | sed -n '3p')
 
-    local msg="📊 <b>THỐNG KÊ LƯU LƯỢNG MẠNG (100% THỰC TẾ)</b>
-━━━━━━━━━━━━━━━━━
-📅 <b>Hôm nay:</b> <code>$(echo "$tod_str" | cut -d'|' -f2)</code> (DL: $(echo "$tod_str" | cut -d'|' -f1))
-🗓 <b>7 ngày qua:</b> <code>$(echo "$s7_str" | cut -d'|' -f2)</code> (DL: $(echo "$s7_str" | cut -d'|' -f1))
-📆 <b>Tháng này (${cur_ym}):</b> <code>$(echo "$sm_str" | cut -d'|' -f2)</code> (DL: $(echo "$sm_str" | cut -d'|' -f1))
-━━━━━━━━━━━━━━━━━
-<i>Số liệu đồng bộ hoàn toàn với Web Dashboard</i>"
+    local msg="📊 <b>BÁO CÁO DỮ LIỆU ĐÃ DÙNG (100% THỰC TẾ)</b>
+━━━━━━━━━━━━━━━━━━
+📅 <b>HÔM NAY (${today_date}):</b>
+   ├ 🌐 Tổng cộng: <code>$(echo "$tod_line" | cut -d'|' -f3)</code>
+   └ 📥 Tải về: <code>$(echo "$tod_line" | cut -d'|' -f1)</code> · 📤 Tải lên: <code>$(echo "$tod_line" | cut -d'|' -f2)</code>
+
+🗓 <b>7 NGÀY GẦN NHẤT:</b>
+   ├ 🌐 Tổng cộng: <code>$(echo "$s7_fmt" | cut -d'|' -f3)</code>
+   └ 📥 Tải về: <code>$(echo "$s7_fmt" | cut -d'|' -f1)</code> · 📤 Tải lên: <code>$(echo "$s7_fmt" | cut -d'|' -f2)</code>
+
+📆 <b>1 THÁNG QUA (Tháng ${cur_month}/${cur_year}):</b>
+   ├ 🌐 Tổng cộng: <code>$(echo "$mon_line" | cut -d'|' -f3)</code>
+   └ 📥 Tải về: <code>$(echo "$mon_line" | cut -d'|' -f1)</code> · 📤 Tải lên: <code>$(echo "$mon_line" | cut -d'|' -f2)</code>
+
+📈 <b>CẢ NĂM (${cur_year}):</b>
+   ├ 🌐 Tổng cộng: <code>$(echo "$yr_line" | cut -d'|' -f3)</code>
+   └ 📥 Tải về: <code>$(echo "$yr_line" | cut -d'|' -f1)</code> · 📤 Tải lên: <code>$(echo "$yr_line" | cut -d'|' -f2)</code>
+━━━━━━━━━━━━━━━━━━
+<i>Dữ liệu đồng bộ 100% với Web Dashboard VCRT</i>"
     send_msg "$msg"
 }
 
-cmd_clients() {
-    local msg="📱 <b>DANH SÁCH THIẾT BỊ ONLINE:</b>
-━━━━━━━━━━━━━━━━━
-"
-    local count=0
-    if [ -f /tmp/dhcp.leases ] && [ -s /tmp/dhcp.leases ]; then
-        while read -r ltime mac ip name clid; do
-            [ "$name" = "*" ] && name="Không rõ tên"
-            count=$((count + 1))
-            local mac_u=$(echo "$mac" | tr '[:lower:]' '[:upper:]')
-            msg="${msg}${count}. <b>${name}</b>
-   ├ IP: <code>${ip}</code>
-   └ MAC: <code>${mac_u}</code>
-"
-        done < /tmp/dhcp.leases
-    fi
-    [ "$count" -eq 0 ] && msg="${msg}<i>Hiện chưa có thiết bị trong bảng cấp phát DHCP.</i>"
-    send_msg "$msg"
-}
-
+# ─── CMD_WIFI: THÔNG SỐ SÓNG & SỐ MÁY TRÊN TỪNG BĂNG TẦN ──────────────────────
 cmd_wifi() {
     local ssid_2g=$(uci -q get wireless.default_radio1.ssid || echo "Xiaomi_2.4G")
     local ch_2g=$(uci -q get wireless.radio1.channel || echo "6")
     local ssid_5g=$(uci -q get wireless.default_radio0.ssid || echo "Xiaomi_5G")
     local ch_5g=$(uci -q get wireless.radio0.channel || echo "149")
 
-    local msg="📶 <b>THÔNG TIN SÓNG WI-FI ROUTER:</b>
-━━━━━━━━━━━━━━━━━
-🔹 <b>Băng tần 2.4GHz:</b>
-   ├ SSID: <code>${ssid_2g}</code>
-   └ Kênh: <code>${ch_2g}</code> (HT20)
+    local cnt_5g=$(iw dev phy0-ap0 station dump 2>/dev/null | grep -c "Station" || echo 0)
+    local cnt_24g=$(iw dev phy1-ap0 station dump 2>/dev/null | grep -c "Station" || echo 0)
 
-🔹 <b>Băng tần 5GHz:</b>
-   ├ SSID: <code>${ssid_5g}</code>
-   └ Kênh: <code>${ch_5g}</code> (VHT80)
-━━━━━━━━━━━━━━━━━"
+    local msg="📶 <b>THÔNG SỐ PHÁT SÓNG WI-FI ROUTER</b>
+━━━━━━━━━━━━━━━━━━
+🔹 <b>Băng tần 5GHz (Tốc độ cao 867Mbps):</b>
+   ├ 🏷 Tên SSID: <code>${ssid_5g}</code>
+   ├ 📡 Kênh: <code>CH ${ch_5g} (VHT80)</code>
+   └ 👥 Đang kết nối: <code>${cnt_5g} thiết bị</code>
+
+🔹 <b>Băng tần 2.4GHz (Xuyên tường 300Mbps):</b>
+   ├ 🏷 Tên SSID: <code>${ssid_2g}</code>
+   ├ 📡 Kênh: <code>CH ${ch_2g} (HT20)</code>
+   └ 👥 Đang kết nối: <code>${cnt_24g} thiết bị</code>
+━━━━━━━━━━━━━━━━━━
+<i>Gõ /clients để xem tên các máy đang kết nối</i>"
+    send_msg "$msg"
+}
+
+# ─── CMD_PING: KIỂM TRA ĐỘ TRỄ INTERNET ───────────────────────────────────────
+cmd_ping() {
+    send_msg "🏓 <i>Đang đo độ trễ mạng đến Cloudflare DNS...</i>"
+    local p_out=$(ping -c 3 -W 2 1.1.1.1 2>/dev/null)
+    local rtt=$(echo "$p_out" | awk -F'/' '/round-trip|rtt/{print $4, $5, $6}')
+    local loss=$(echo "$p_out" | grep -o '[0-9]*% packet loss' | head -n1)
+
+    if [ -n "$rtt" ]; then
+        local min_ms=$(echo "$rtt" | awk '{print $1}')
+        local avg_ms=$(echo "$rtt" | awk '{print $2}')
+        local max_ms=$(echo "$rtt" | awk '{print $3}')
+
+        local qual="🟢 Rất tốt & Ổn định"
+        local avg_int=$(echo "$avg_ms" | awk '{print int($1)}')
+        [ "$avg_int" -gt 60 ] && qual="🟡 Khá"
+        [ "$avg_int" -gt 150 ] && qual="🔴 Trễ cao"
+
+        local msg="🏓 <b>KẾT QUẢ ĐO ĐỘ TRỄ MẠNG (PING)</b>
+━━━━━━━━━━━━━━━━━━
+🌐 <b>Máy chủ:</b> <code>Cloudflare DNS (1.1.1.1)</code>
+⚡ <b>Độ trễ trung bình:</b> <code>${avg_ms} ms</code>
+📊 <b>Tối thiểu / Tối đa:</b> <code>${min_ms} ms / ${max_ms} ms</code>
+📦 <b>Tình trạng mất gói:</b> <code>${loss:-0% packet loss}</code>
+📶 <b>Chất lượng đường truyền:</b> ${qual}
+━━━━━━━━━━━━━━━━━━"
+        send_msg "$msg"
+    else
+        send_msg "❌ <b>Mất kết nối Internet!</b> Không thể gửi gói tin ping đến máy chủ bên ngoài."
+    fi
+}
+
+# ─── CMD_BLOCK: CHẶN THIẾT BỊ QUA TELEGRAM ────────────────────────────────────
+cmd_block() {
+    local target_mac="$1"
+    local dur="$2"
+    [ -z "$dur" ] && dur=30
+
+    if [ -z "$target_mac" ]; then
+        send_msg "⚠️ <b>Cú pháp lệnh chưa đúng!</b>
+Vui lòng nhập: <code>/block &lt;Địa_chỉ_MAC&gt; [Số_phút]</code>
+Ví dụ: <code>/block 00:11:22:33:44:55 60</code>"
+        return
+    fi
+
+    local target_mac_low=$(echo "$target_mac" | tr 'A-Z' 'a-z')
+    local now_epoch=$(date +%s 2>/dev/null || echo 0)
+    local expire=$(( now_epoch + dur * 60 ))
+
+    iptables -D FORWARD -m mac --mac-source "$target_mac_low" -j DROP 2>/dev/null || true
+    iptables -I FORWARD -m mac --mac-source "$target_mac_low" -j DROP
+
+    echo "$target_mac_low" >> "$BLOCKED_SOFT_FILE"
+    [ -f "$TIMED_BLOCKS_FILE" ] && grep -v -i "^${target_mac_low}|" "$TIMED_BLOCKS_FILE" > "${TIMED_BLOCKS_FILE}.tmp" 2>/dev/null || true
+    mv "${TIMED_BLOCKS_FILE}.tmp" "$TIMED_BLOCKS_FILE" 2>/dev/null || true
+    echo "${target_mac_low}|soft|${now_epoch}|${expire}|${dur}|Telegram-Block|N/A" >> "$TIMED_BLOCKS_FILE"
+
+    local msg="⛔ <b>ĐÃ CHẶN KẾT NỐI INTERNET!</b>
+━━━━━━━━━━━━━━━━━━
+🔑 <b>MAC:</b> <code>${target_mac}</code>
+⏱ <b>Thời hạn chặn:</b> <code>${dur} phút</code>
+━━━━━━━━━━━━━━━━━━
+<i>Hệ thống sẽ tự động mở lại mạng khi hết giờ hoặc gõ /unblock ${target_mac}</i>"
+    send_msg "$msg"
+}
+
+# ─── CMD_UNBLOCK: MỞ MẠNG QUA TELEGRAM ────────────────────────────────────────
+cmd_unblock() {
+    local target_mac="$1"
+    if [ -z "$target_mac" ]; then
+        send_msg "⚠️ <b>Cú pháp lệnh chưa đúng!</b>
+Vui lòng nhập: <code>/unblock &lt;Địa_chỉ_MAC&gt;</code>
+Ví dụ: <code>/unblock 00:11:22:33:44:55</code>"
+        return
+    fi
+
+    local target_mac_low=$(echo "$target_mac" | tr 'A-Z' 'a-z')
+    iptables -D FORWARD -m mac --mac-source "$target_mac_low" -j DROP 2>/dev/null || true
+    iptables -D INPUT -m mac --mac-source "$target_mac_low" -j DROP 2>/dev/null || true
+    grep -v -i "$target_mac_low" "$BLOCKED_SOFT_FILE" > "${BLOCKED_SOFT_FILE}.tmp" 2>/dev/null || true
+    mv "${BLOCKED_SOFT_FILE}.tmp" "$BLOCKED_SOFT_FILE" 2>/dev/null || true
+    grep -v -i "$target_mac_low" "$BLOCKED_HARD_FILE" > "${BLOCKED_HARD_FILE}.tmp" 2>/dev/null || true
+    mv "${BLOCKED_HARD_FILE}.tmp" "$BLOCKED_HARD_FILE" 2>/dev/null || true
+    [ -f "$TIMED_BLOCKS_FILE" ] && grep -v -i "^${target_mac_low}|" "$TIMED_BLOCKS_FILE" > "${TIMED_BLOCKS_FILE}.tmp" 2>/dev/null || true
+    mv "${TIMED_BLOCKS_FILE}.tmp" "$TIMED_BLOCKS_FILE" 2>/dev/null || true
+
+    local msg="🔓 <b>ĐÃ MỞ LẠI KẾT NỐI INTERNET!</b>
+━━━━━━━━━━━━━━━━━━
+🔑 <b>MAC:</b> <code>${target_mac}</code>
+━━━━━━━━━━━━━━━━━━
+<i>Thiết bị đã có thể truy cập mạng bình thường.</i>"
     send_msg "$msg"
 }
 
 cmd_help() {
-    local msg="🤖 <b>BẢNG LỆNH ĐIỀU KHIỂN TELEGRAM BOT:</b>
-━━━━━━━━━━━━━━━━━
-/status - Trạng thái router (CPU, RAM, Uptime, WAN IP)
-/traffic - Thống kê dung lượng thực tế (Hôm nay, 7 ngày, Tháng)
-/clients - Danh sách thiết bị đang kết nối
-/wifi - Thông tin mạng Wi-Fi 2.4GHz & 5GHz
-/ping - Kiểm tra kết nối router
-/reboot - Khởi động lại router từ xa
-/help - Hướng dẫn sử dụng
-━━━━━━━━━━━━━━━━━"
+    local msg="🤖 <b>VCRT OS - TRỢ LÝ ĐIỀU HÀNH ROUTER 24/7</b>
+━━━━━━━━━━━━━━━━━━
+Dưới đây là các lệnh điều khiển:
+
+⚡ /status - Xem CPU, RAM, Uptime, WAN IP
+📱 /clients - Danh sách thiết bị ĐANG ONLINE thực tế
+📊 /traffic - Thống kê dung lượng mạng đã dùng
+📶 /wifi - Thông số phát sóng Wi-Fi 2.4G & 5G
+🏓 /ping - Kiểm tra độ trễ mạng Internet
+⛔ /block &lt;mac&gt; [phút] - Chặn mạng có hẹn giờ
+🔓 /unblock &lt;mac&gt; - Mở mạng lại ngay lập tức
+🔄 /reboot - Khởi động lại router từ xa
+❓ /help - Hiển thị hướng dẫn này
+━━━━━━━━━━━━━━━━━━
+<i>Bạn có thể bấm trực tiếp các nút menu ở bàn phím bên dưới!</i>"
     send_msg "$msg"
 }
 
@@ -424,14 +699,12 @@ load_config
 
 if [ "$BOT_ENABLED" != "1" ] || [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
     echo "Telegram Bot chua duoc cau hinh hoac bi tat trong $CONF_FILE"
-    # Vẫn chạy tiến trình ghi nhận lưu lượng nền để tích lũy dữ liệu cho Web!
     record_traffic_periodically &
     watch_block_timers &
     wait
     exit 0
 fi
 
-# Khởi chạy 3 worker nền
 watch_wifi_devices &
 PID_WIFI=$!
 watch_block_timers &
@@ -446,7 +719,7 @@ cleanup() {
 trap cleanup INT TERM EXIT
 
 send_msg "🚀 <b>VCRT Telegram Bot đã khởi động thành công!</b>
-Hệ thống giám sát 24/7 đang hoạt động. Gõ /help để xem các lệnh."
+Hệ thống giám sát 24/7 đang hoạt động. Gõ /help hoặc chọn nút bên dưới để điều khiển."
 
 OFFSET=0
 API_URL="https://api.telegram.org/bot${BOT_TOKEN}"
@@ -469,18 +742,25 @@ while true; do
             OFFSET=$((UPDATE_ID + 1))
 
             if [ "$SENDER_ID" = "$CHAT_ID" ]; then
-                case "$CMD_TEXT" in
-                    /status*|/info*) cmd_status ;;
-                    /traffic*|/dungluong*) cmd_traffic ;;
-                    /clients*|/devices*) cmd_clients ;;
-                    /wifi*) cmd_wifi ;;
-                    /ping*) send_msg "🏓 <b>Pong!</b> Router phản hồi tốt." ;;
+                # Clean command name
+                cmd_name=$(echo "$CMD_TEXT" | awk '{print $1}' | tr '[:upper:]' '[:lower:]')
+                arg1=$(echo "$CMD_TEXT" | awk '{print $2}')
+                arg2=$(echo "$CMD_TEXT" | awk '{print $3}')
+
+                case "$cmd_name" in
+                    /status*|/info*|/router*) cmd_status ;;
+                    /client|/clients*|/device*|/devices*|/thietbi*) cmd_clients ;;
+                    /traffic*|/dungluong*|/data*) cmd_traffic ;;
+                    /wifi*|/song*) cmd_wifi ;;
+                    /ping*|/test*) cmd_ping ;;
+                    /block*) cmd_block "$arg1" "$arg2" ;;
+                    /unblock*) cmd_unblock "$arg1" ;;
                     /reboot*)
                         send_msg "⚠️ <b>Đang khởi động lại router trong 3 giây...</b>"
                         sleep 3
                         /sbin/reboot
                         ;;
-                    /help*|/start*) cmd_help ;;
+                    /help*|/start*|*) cmd_help ;;
                 esac
             fi
         fi

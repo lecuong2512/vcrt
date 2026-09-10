@@ -1,0 +1,11 @@
+# ==============================================================================
+# VCRT OS - TELEGRAM BOT CONFIGURATION
+# File: /etc/vcrt/telegram.conf
+# ==============================================================================
+BOT_ENABLED=0
+BOT_TOKEN=""
+CHAT_ID=""
+NOTIF_WIFI_JOIN=1
+NOTIF_BLOCK_EXPIRE=1
+NOTIF_DAILY_REPORT=1
+DAILY_REPORT_HOUR=20
