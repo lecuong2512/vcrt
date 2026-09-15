@@ -66,13 +66,28 @@ if [ -f vcrt ]; then
 fi
 
 # 6. Chep Telegram Bot Daemon & Init Service
-if [ -f vcrt_bot.sh ]; then
+mkdir -p /usr/lib/vcrt_bot 2>/dev/null || true
+if [ -d bot/lib ]; then
+    cp -rf bot/lib/* /usr/lib/vcrt_bot/ 2>/dev/null || true
+fi
+
+if [ -f bot/vcrt_bot.sh ]; then
+    cp -f bot/vcrt_bot.sh /usr/bin/vcrt_bot.sh
+    chmod +x /usr/bin/vcrt_bot.sh
+    echo ">> Da cap nhat Bot Daemon: /usr/bin/vcrt_bot.sh"
+elif [ -f vcrt_bot.sh ]; then
     cp -f vcrt_bot.sh /usr/bin/vcrt_bot.sh
     chmod +x /usr/bin/vcrt_bot.sh
     echo ">> Da cap nhat Bot Daemon: /usr/bin/vcrt_bot.sh"
 fi
 
-if [ -f vcrt_bot ]; then
+if [ -f bot/vcrt_bot_init ]; then
+    cp -f bot/vcrt_bot_init /etc/init.d/vcrt_bot
+    chmod +x /etc/init.d/vcrt_bot
+    /etc/init.d/vcrt_bot enable 2>/dev/null || true
+    /etc/init.d/vcrt_bot restart 2>/dev/null || true
+    echo ">> Da khoi dong lai dich vu vcrt_bot qua procd"
+elif [ -f vcrt_bot ]; then
     cp -f vcrt_bot /etc/init.d/vcrt_bot
     chmod +x /etc/init.d/vcrt_bot
     /etc/init.d/vcrt_bot enable 2>/dev/null || true
