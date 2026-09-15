@@ -4,22 +4,61 @@
 # Tương thích BusyBox POSIX OpenWrt 21.02 / 22.03 / 23.05 / 24.10 / 25.12 (KWrt)
 # ==============================================================================
 
-set -e
 
 echo "=================================================================="
 echo "⚡ DANG CAI DAT VCRT OS v2.0 (MULTI-PLATFORM CYBER ROUTER OS)"
 echo "=================================================================="
 
 # 1. Tu dong xac dinh thu muc nguon (Source Directory)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-if [ -d "$SCRIPT_DIR/../backend" ]; then
-    ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
-elif [ -d "$SCRIPT_DIR/backend" ]; then
+SCRIPT_DIR="$(cd "$(dirname "$0")" 2>/dev/null && pwd || echo ".")"
+ROOT_DIR=""
+
+# Kiem tra cac vi tri ma nguon cuc bo co san
+if [ -d "$SCRIPT_DIR/backend" ] && [ -f "$SCRIPT_DIR/backend/vcrt_cgi.sh" ]; then
     ROOT_DIR="$SCRIPT_DIR"
-elif [ -d "/tmp/backend" ]; then
+elif [ -d "$SCRIPT_DIR/../backend" ] && [ -f "$SCRIPT_DIR/../backend/vcrt_cgi.sh" ]; then
+    ROOT_DIR="$(cd "$SCRIPT_DIR/.." 2>/dev/null && pwd)"
+elif [ -d "/tmp/vcrt_deploy/backend" ] && [ -f "/tmp/vcrt_deploy/backend/vcrt_cgi.sh" ]; then
+    ROOT_DIR="/tmp/vcrt_deploy"
+elif [ -d "/tmp/backend" ] && [ -f "/tmp/backend/vcrt_cgi.sh" ]; then
     ROOT_DIR="/tmp"
-else
+elif [ -d "./backend" ] && [ -f "./backend/vcrt_cgi.sh" ]; then
     ROOT_DIR="."
+fi
+
+# Neu chay qua pipe (curl ... | sh) hoac chua co ma nguon cuc bo:
+if [ -z "$ROOT_DIR" ]; then
+    echo ">> [0/9] Phat hien cai dat tu xa (One-liner curl ... | sh)..."
+    echo "   -> Dang tai goi cai dat VCRT OS v2.0 (deploy_vcrt.tar.gz)..."
+    mkdir -p /tmp/vcrt_deploy
+    DL_OK=0
+    URL_PRIMARY="https://github.com/lecuong2512/vcrt/raw/main/deploy_vcrt.tar.gz"
+    URL_FALLBACK="https://raw.githubusercontent.com/lecuong2512/vcrt/main/deploy_vcrt.tar.gz"
+
+    if command -v curl >/dev/null 2>&1; then
+        if curl -L -k -s --connect-timeout 15 --max-time 120 -o /tmp/deploy_vcrt.tar.gz "$URL_PRIMARY" 2>/dev/null || \
+           curl -L -k -s --connect-timeout 15 --max-time 120 -o /tmp/deploy_vcrt.tar.gz "$URL_FALLBACK" 2>/dev/null; then
+            DL_OK=1
+        fi
+    elif command -v wget >/dev/null 2>&1; then
+        if wget --no-check-certificate -q -T 30 -O /tmp/deploy_vcrt.tar.gz "$URL_PRIMARY" 2>/dev/null || \
+           wget --no-check-certificate -q -T 30 -O /tmp/deploy_vcrt.tar.gz "$URL_FALLBACK" 2>/dev/null; then
+            DL_OK=1
+        fi
+    fi
+
+    if [ "$DL_OK" = "1" ] && [ -s /tmp/deploy_vcrt.tar.gz ]; then
+        echo "   -> Tai goi cai dat thanh cong. Dang giai nen..."
+        (cd /tmp/vcrt_deploy && tar -xzf /tmp/deploy_vcrt.tar.gz 2>/dev/null) || {
+            echo "❌ LOI: Khong the giai nen /tmp/deploy_vcrt.tar.gz!"
+            exit 1
+        }
+        ROOT_DIR="/tmp/vcrt_deploy"
+    else
+        echo "❌ LOI: Khong the tai deploy_vcrt.tar.gz tu GitHub!"
+        echo "   Vui long kiem tra ket noi Internet tren router hoac thu lai bang lenh thu cong."
+        exit 1
+    fi
 fi
 
 # 2. Tao cay thu muc chuan tren router
@@ -154,6 +193,8 @@ echo ">> [5/9] Cai dat giao dien Web VCRT UI v2.0..."
 web_src=""
 if [ -d "$ROOT_DIR/web/dist" ]; then
     web_src="$ROOT_DIR/web/dist"
+elif [ -d "$ROOT_DIR/dist" ]; then
+    web_src="$ROOT_DIR/dist"
 elif [ -d "$ROOT_DIR/Des/dist" ]; then
     web_src="$ROOT_DIR/Des/dist"
 elif [ -d "$ROOT_DIR/www/vcrt" ]; then
@@ -166,7 +207,6 @@ if [ -n "$web_src" ]; then
     echo "   -> Da cap nhat Web UI tai /www/vcrt/ tu $web_src"
 fi
 
-# 8. Deploy Telegram Bot Daemon & procd init
 # 8. Deploy Telegram Bot Daemon & procd init
 echo ">> [6/9] Cai dat VCRT Telegram Bot Daemon & procd service..."
 mkdir -p /usr/lib/vcrt_bot 2>/dev/null || true
@@ -208,14 +248,51 @@ fi
 
 # 10. Cai dat & Khoi chay ZeroTier VPN (neu chua co)
 echo ">> [8/9] Thiet lap dich vu ZeroTier ket noi tu xa..."
+if [ ! -c /dev/net/tun ]; then
+    mkdir -p /dev/net 2>/dev/null || true
+    mknod /dev/net/tun c 10 200 2>/dev/null || true
+    chmod 600 /dev/net/tun 2>/dev/null || true
+fi
 if ! command -v zerotier-cli >/dev/null 2>&1; then
     echo "   -> Dang cai dat zerotier package..."
     opkg update >/dev/null 2>&1 || true
     opkg install zerotier 2>/dev/null || echo "   -> Luu y: Khong the tai zerotier tu opkg (co the bo qua neu chi dung cuc bo)."
 fi
+if [ -f /etc/config/zerotier ]; then
+    uci set zerotier.@zerotier[0].enabled='1' 2>/dev/null || true
+    uci commit zerotier 2>/dev/null || true
+fi
+if command -v uci >/dev/null 2>&1; then
+    if ! uci -q show firewall | grep -q "name='zerotier'"; then
+        uci add firewall zone >/dev/null 2>&1 || true
+        uci set firewall.@zone[-1].name='zerotier'
+        uci set firewall.@zone[-1].input='ACCEPT'
+        uci set firewall.@zone[-1].output='ACCEPT'
+        uci set firewall.@zone[-1].forward='ACCEPT'
+        uci set firewall.@zone[-1].masq='1'
+        uci add_list firewall.@zone[-1].device='zt+'
+        
+        uci add firewall forwarding >/dev/null 2>&1 || true
+        uci set firewall.@forwarding[-1].src='zerotier'
+        uci set firewall.@forwarding[-1].dest='lan'
+        
+        uci add firewall forwarding >/dev/null 2>&1 || true
+        uci set firewall.@forwarding[-1].src='lan'
+        uci set firewall.@forwarding[-1].dest='zerotier'
+        
+        uci add firewall rule >/dev/null 2>&1 || true
+        uci set firewall.@rule[-1].name='Allow-ZeroTier-UDP'
+        uci set firewall.@rule[-1].src='wan'
+        uci set firewall.@rule[-1].dest_port='9993'
+        uci set firewall.@rule[-1].proto='udp'
+        uci set firewall.@rule[-1].target='ACCEPT'
+        
+        uci commit firewall 2>/dev/null || true
+    fi
+fi
 if [ -f /etc/init.d/zerotier ]; then
     /etc/init.d/zerotier enable 2>/dev/null || true
-    /etc/init.d/zerotier start 2>/dev/null || true
+    /etc/init.d/zerotier restart 2>/dev/null || true
 fi
 
 # 11. MTU Fix Hotplug Script (TCP MSS Clamping chong nghen WISP / 4G)
@@ -240,7 +317,7 @@ chmod +x /www/cgi-bin/vcrt \
          /usr/bin/vcrt_bot.sh 2>/dev/null || true
 
 # Don dep tap tin tam sau cai dat
-rm -rf /tmp/vcrt /tmp/vcrt_bot /tmp/vcrt_bot.sh /tmp/www /tmp/deploy_vcrt.tar.gz 2>/dev/null || true
+rm -rf /tmp/vcrt /tmp/vcrt_bot /tmp/vcrt_bot.sh /tmp/www /tmp/deploy_vcrt.tar.gz /tmp/vcrt_deploy 2>/dev/null || true
 
 # Restart network services
 /etc/init.d/dnsmasq restart 2>/dev/null || true

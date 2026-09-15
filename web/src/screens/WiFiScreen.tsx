@@ -16,14 +16,16 @@ export default function WiFiScreen() {
   const { success, error, info, warning } = useToast();
 
   const [ssid5, setSsid5] = useState('Xiaomi_Mini_5G');
-  const [pass5, setPass5] = useState('25122035');
+  const [pass5, setPass5] = useState('');
   const [ch5, setCh5] = useState('157');
   const [power5, setPower5] = useState('20');
+  const [realCh5, setRealCh5] = useState('');
 
   const [ssid24, setSsid24] = useState('Xiaomi_Mini_2.4G');
-  const [pass24, setPass24] = useState('25122035');
+  const [pass24, setPass24] = useState('');
   const [ch24, setCh24] = useState('6');
   const [power24, setPower24] = useState('20');
+  const [realCh24, setRealCh24] = useState('');
 
   // Scanner state
   const [scanModalOpen, setScanModalOpen] = useState(false);
@@ -47,13 +49,17 @@ export default function WiFiScreen() {
           if (res.wifi5) {
             if (res.wifi5.ssid) setSsid5(res.wifi5.ssid);
             if (res.wifi5.pass) setPass5(res.wifi5.pass);
-            if (res.wifi5.channel) setCh5(res.wifi5.channel);
+            const c5 = res.wifi5.configured_channel || res.wifi5.channel;
+            if (c5) setCh5(c5);
+            if (res.wifi5.real_channel) setRealCh5(res.wifi5.real_channel);
             if (res.wifi5.power) setPower5(res.wifi5.power);
           }
           if (res.wifi24) {
             if (res.wifi24.ssid) setSsid24(res.wifi24.ssid);
             if (res.wifi24.pass) setPass24(res.wifi24.pass);
-            if (res.wifi24.channel) setCh24(res.wifi24.channel);
+            const c24 = res.wifi24.configured_channel || res.wifi24.channel;
+            if (c24) setCh24(c24);
+            if (res.wifi24.real_channel) setRealCh24(res.wifi24.real_channel);
             if (res.wifi24.power) setPower24(res.wifi24.power);
           }
         }
@@ -169,6 +175,7 @@ export default function WiFiScreen() {
   };
 
   const channels5G = [
+    { val: 'auto', label: 'Tự động (Auto)' },
     { val: '36', label: 'CH 36 (5180 MHz - Tốt cho nhà riêng)' },
     { val: '40', label: 'CH 40 (5200 MHz)' },
     { val: '44', label: 'CH 44 (5220 MHz)' },
@@ -181,6 +188,7 @@ export default function WiFiScreen() {
   ];
 
   const channels24G = [
+    { val: 'auto', label: 'Tự động (Auto)' },
     { val: '1', label: 'CH 1 (2412 MHz)' },
     { val: '6', label: 'CH 6 (2437 MHz - Mặc định khuyến nghị)' },
     { val: '11', label: 'CH 11 (2462 MHz)' },
@@ -265,6 +273,7 @@ export default function WiFiScreen() {
         channels={channels5G}
         power={power5}
         onPowerChange={setPower5}
+        realChannel={realCh5}
       />
 
       {/* 2.4GHz Card */}
@@ -281,7 +290,9 @@ export default function WiFiScreen() {
         channels={channels24G}
         power={power24}
         onPowerChange={setPower24}
+        realChannel={realCh24}
       />
+
 
       {/* Submit Button */}
       <div className="flex justify-end pt-2">

@@ -3,7 +3,9 @@ import { fetchApi, postApi } from './client';
 export interface NextDNSStatus {
   active: boolean;
   profile_id?: string;
+  has_api_key?: boolean;
   has_apikey?: boolean;
+  masked_api_key?: string;
   apikey_masked?: string;
   linked_ip?: string;
   node?: string;

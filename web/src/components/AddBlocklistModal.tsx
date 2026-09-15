@@ -55,7 +55,9 @@ export function AddBlocklistModal({
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   const filteredLists = useMemo(() => {
-    let list = availableBlocklists.map((b) => {
+    const safeList = Array.isArray(availableBlocklists) ? availableBlocklists : [];
+    let list = safeList.map((b) => {
+      if (!b) return { id: '', name: '', description: '', website: '', entries: 0, updatedOn: '' };
       if (b.id === 'nextdns-recommended') {
         return {
           ...b,
@@ -74,14 +76,14 @@ export function AddBlocklistModal({
         (b) =>
           (b.name && b.name.toLowerCase().includes(q)) ||
           (b.description && b.description.toLowerCase().includes(q)) ||
-          b.id.toLowerCase().includes(q)
+          (b.id && b.id.toLowerCase().includes(q))
       );
     }
 
     if (sortBy === 'entries') {
       list.sort((a, b) => (b.entries || 0) - (a.entries || 0));
     } else if (sortBy === 'name') {
-      list.sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+      list.sort((a, b) => (a.name || a.id || '').localeCompare(b.name || b.id || ''));
     }
 
     return list;
@@ -130,13 +132,14 @@ export function AddBlocklistModal({
 
         {/* List Content */}
         <div className="flex flex-col gap-2.5 max-h-[60vh] overflow-y-auto pr-1">
-          {filteredLists.length === 0 ? (
+          {(Array.isArray(filteredLists) ? filteredLists : []).length === 0 ? (
             <div className="p-8 text-center text-sm text-slate-400">
               Không tìm thấy danh sách chặn phù hợp với từ khóa.
             </div>
           ) : (
-            filteredLists.map((b) => {
-              const isAdded = activeBlocklistIds.includes(b.id);
+            (Array.isArray(filteredLists) ? filteredLists : []).map((b) => {
+              const safeActiveIds = Array.isArray(activeBlocklistIds) ? activeBlocklistIds : [];
+              const isAdded = safeActiveIds.includes(b.id);
               const isLoading = actionLoading === b.id;
 
               return (

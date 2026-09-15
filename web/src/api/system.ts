@@ -38,6 +38,14 @@ export interface TrafficHistoryItem {
   ul: number;
 }
 
+export interface TrafficPeriodDetail {
+  dl: string;
+  ul: string;
+  total: string;
+  unit?: string;
+  points: TrafficHistoryItem[];
+}
+
 export interface SystemStatus {
   status: string;
   device_name: string;
@@ -58,11 +66,11 @@ export interface SystemStatus {
   peak_bandwidth?: { dl_mbps: number; ul_mbps: number };
   traffic?: { dl: string; ul: string };
   traffic_stats?: {
-    today?: TrafficHistoryItem[];
-    "7d"?: TrafficHistoryItem[];
-    month?: TrafficHistoryItem[];
-    quarter?: TrafficHistoryItem[];
-    year?: TrafficHistoryItem[];
+    today?: TrafficPeriodDetail | TrafficHistoryItem[];
+    "7d"?: TrafficPeriodDetail | TrafficHistoryItem[];
+    month?: TrafficPeriodDetail | TrafficHistoryItem[];
+    quarter?: TrafficPeriodDetail | TrafficHistoryItem[];
+    year?: TrafficPeriodDetail | TrafficHistoryItem[];
   };
   nextdns?: { active: boolean; node: string };
 }

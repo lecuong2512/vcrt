@@ -1,4 +1,4 @@
-import { useTheme, ThemeProvider } from "./ThemeContext";
+﻿import { useTheme, ThemeProvider } from "./ThemeContext";
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   fetchApi,
@@ -528,8 +528,8 @@ function DashboardScreen() {
   const [uplink, setUplink] = useState<UplinkInfo>({
     type: "repeater",
     title: "Kích sóng Wi-Fi Không Dây (WISP Repeater)",
-    ssid: "Xom Tro",
-    bssid: "c4:eb:ff:41:6b:41",
+    ssid: "Main_WiFi",
+    bssid: "00:11:22:33:44:55",
     channel: "52",
     band: "5 GHz",
     signal_dbm: -65,
@@ -1517,13 +1517,13 @@ function ClientsScreen() {
 }
 function WiFiScreen() {
   const [ssid5, setSsid5] = useState("VC 5Ghz");
-  const [pass5, setPass5] = useState("25122035");
+  const [pass5, setPass5] = useState("");
   const [ch5, setCh5] = useState("157");
   const [power5, setPower5] = useState("20");
   const [show5, setShow5] = useState(false);
 
   const [ssid24, setSsid24] = useState("VC 2.4Ghz");
-  const [pass24, setPass24] = useState("25122035");
+  const [pass24, setPass24] = useState("");
   const [ch24, setCh24] = useState("6");
   const [power24, setPower24] = useState("20");
   const [show24, setShow24] = useState(false);
@@ -2718,7 +2718,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                   type={showRawToken ? "text" : "password"}
                   value={tgToken}
                   onChange={(e) => setTgToken(e.target.value)}
-                  placeholder={tgConfig?.has_token ? "Để trống nếu không muốn đổi Token" : "vd: 7427895422:AAGcWzIvYYhx..."}
+                  placeholder={tgConfig?.has_token ? "Để trống nếu không muốn đổi Token" : "vd: 1234567890:ABC-DEF..."}
                   style={{
                     width: "100%",
                     background: "var(--bg-canvas)",
@@ -2750,7 +2750,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
                 type="text"
                 value={tgChatId}
                 onChange={(e) => setTgChatId(e.target.value)}
-                placeholder="vd: 5746523635, -1001234567890"
+                placeholder="vd: 123456789, -1001234567890"
                 style={{
                   width: "100%",
                   background: "var(--bg-canvas)",

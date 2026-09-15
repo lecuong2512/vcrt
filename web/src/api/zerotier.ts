@@ -8,6 +8,7 @@ export interface ZeroTierNetwork {
   type: string;
   dev: string;
   assigned_ip: string;
+  ip?: string;
 }
 
 export interface ZeroTierStatus {
@@ -30,6 +31,10 @@ export interface ZeroTierPeer {
 
 export async function getZeroTierStatus(): Promise<ZeroTierStatus | null> {
   return await fetchApi<ZeroTierStatus>('zerotier_get');
+}
+
+export async function controlZeroTierService(action: 'start' | 'stop' | 'restart') {
+  return await postApi('zerotier_service', { state: action, action }, { state: action });
 }
 
 export async function joinZeroTierNetwork(nwid: string) {

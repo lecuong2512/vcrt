@@ -65,6 +65,13 @@ interface NextDNSLog {
   reasons?: { id: string; name: string }[];
 }
 
+const maskProfileId = (id: string): string => {
+  if (!id) return '';
+  const trimmed = id.trim();
+  if (trimmed.length <= 4) return '••••••';
+  return `${trimmed.slice(0, 2)}****${trimmed.slice(-2)}`;
+};
+
 export default function NextDNSScreen() {
   const { success, error, info } = useToast();
 
@@ -73,6 +80,13 @@ export default function NextDNSScreen() {
   const [hasApiKey, setHasApiKey] = useState(false);
   const [maskedKey, setMaskedKey] = useState('');
   const [linkedIp, setLinkedIp] = useState('');
+
+  // Privacy & Masking Toggles
+  const [showProfileId, setShowProfileId] = useState(false);
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showProfileInput, setShowProfileInput] = useState(false);
+  const [showApiKeyInput, setShowApiKeyInput] = useState(false);
+  const [showApiKeyInModal, setShowApiKeyInModal] = useState(false);
 
   // Sub-tabs
   type SubTab = 'analytics' | 'logs' | 'privacy' | 'parental' | 'security' | 'lists';
@@ -121,8 +135,8 @@ export default function NextDNSScreen() {
           setProfileId(data.profile_id);
           setProfileInput(data.profile_id);
         }
-        setHasApiKey(!!data.has_apikey);
-        setMaskedKey(data.apikey_masked || '');
+        setHasApiKey(Boolean(data.has_api_key ?? data.has_apikey));
+        setMaskedKey(data.masked_api_key || data.apikey_masked || '');
         setLinkedIp(data.linked_ip || '');
       }
     } catch {
@@ -141,50 +155,67 @@ export default function NextDNSScreen() {
 
     try {
       if (activeSubTab === 'analytics') {
-        const [statsRes, domainsRes] = await Promise.all([
+        const [statsRes, domainsRes, blockedDomainsRes] = await Promise.all([
           proxyNextDnsApi(`profiles/${profileId}/analytics/status?from=${timeRange}`, 'GET'),
-          proxyNextDnsApi(`profiles/${profileId}/analytics/domains?from=${timeRange}&limit=10`, 'GET')
+          proxyNextDnsApi(`profiles/${profileId}/analytics/domains?status=default&from=${timeRange}&limit=10`, 'GET'),
+          proxyNextDnsApi(`profiles/${profileId}/analytics/domains?status=blocked&from=${timeRange}&limit=10`, 'GET').catch(() => null)
         ]);
 
-        if (statsRes && Array.isArray(statsRes)) {
-          const totalQ = statsRes.reduce((acc: number, r: any) => acc + (r.queries || 0), 0);
-          const blockedQ = statsRes.find((r: any) => r.status === 'blocked')?.queries || 0;
-          setAnalytics({ queries: totalQ, blocked: blockedQ });
+        const statsData = Array.isArray(statsRes?.data) ? statsRes.data : Array.isArray(statsRes) ? statsRes : [];
+        let totalQ = 0;
+        let blockedQ = 0;
+        for (const item of statsData) {
+          if (item.status === 'blocked') blockedQ = Number(item.queries) || 0;
+          else totalQ += Number(item.queries) || 0;
         }
+        setAnalytics({ queries: totalQ + blockedQ, blocked: blockedQ });
 
-        if (domainsRes && Array.isArray(domainsRes)) {
-          setResolvedDomains(domainsRes);
-        }
+        const domainsData = Array.isArray(domainsRes?.data) ? domainsRes.data : Array.isArray(domainsRes) ? domainsRes : [];
+        setResolvedDomains(domainsData.map((d: any) => ({
+          domain: d.domain || d.root || 'unknown',
+          queries: Number(d.queries) || 0
+        })));
+
+        const blockedData = Array.isArray(blockedDomainsRes?.data) ? blockedDomainsRes.data : Array.isArray(blockedDomainsRes) ? blockedDomainsRes : [];
+        setBlockedDomains(blockedData.map((d: any) => ({
+          domain: d.domain || d.root || 'unknown',
+          queries: Number(d.queries) || 0,
+          tracker: d.tracker
+        })));
       } else if (activeSubTab === 'logs') {
         setFetchingLogs(true);
         const logsRes = await proxyNextDnsApi(`profiles/${profileId}/logs?limit=40`, 'GET');
-        if (logsRes && logsRes.data) {
-          setLogs(logsRes.data);
-        }
+        const logsData = Array.isArray(logsRes?.data) ? logsRes.data : Array.isArray(logsRes) ? logsRes : [];
+        setLogs(logsData);
         setFetchingLogs(false);
       } else if (activeSubTab === 'privacy') {
-        const [profRes, parentBlocklists] = await Promise.all([
-          proxyNextDnsApi(`profiles/${profileId}/privacy`, 'GET'),
-          proxyNextDnsApi('parentalcontrol/blocklists', 'GET').catch(() => null)
+        const [curRes, libRes] = await Promise.all([
+          proxyNextDnsApi(`profiles/${profileId}/privacy/blocklists`, 'GET'),
+          proxyNextDnsApi('privacy/blocklists', 'GET').catch(() => null)
         ]);
-        if (profRes) {
-          setActiveBlocklists(profRes.blocklists || []);
-        }
-        if (parentBlocklists && Array.isArray(parentBlocklists)) {
-          setAvailableBlocklists(parentBlocklists);
-        }
+        const activeLists = Array.isArray(curRes?.data) ? curRes.data : Array.isArray(curRes) ? curRes : [];
+        const availLists = Array.isArray(libRes?.data) ? libRes.data : Array.isArray(libRes) ? libRes : [];
+        setActiveBlocklists(activeLists);
+        setAvailableBlocklists(availLists);
       } else if (activeSubTab === 'parental' || activeSubTab === 'security') {
-        const res = await proxyNextDnsApi(`profiles/${profileId}/${activeSubTab}`, 'GET');
-        if (res) {
-          setProfileData(res);
+        const pRes = await proxyNextDnsApi(`profiles/${profileId}`, 'GET');
+        if (pRes) {
+          const pData = pRes?.data || pRes;
+          setProfileData({
+            ...pData,
+            ...(pData?.parentalControl || {}),
+            ...(pData?.security || {})
+          });
         }
       } else if (activeSubTab === 'lists') {
         const [denyRes, allowRes] = await Promise.all([
           proxyNextDnsApi(`profiles/${profileId}/denylist`, 'GET'),
           proxyNextDnsApi(`profiles/${profileId}/allowlist`, 'GET')
         ]);
-        if (denyRes) setDenylist(denyRes);
-        if (allowRes) setAllowlist(allowRes);
+        const dList = Array.isArray(denyRes?.data) ? denyRes.data : Array.isArray(denyRes) ? denyRes : [];
+        const aList = Array.isArray(allowRes?.data) ? allowRes.data : Array.isArray(allowRes) ? allowRes : [];
+        setDenylist(dList);
+        setAllowlist(aList);
       }
     } catch (e: any) {
       console.warn('[NextDNS Cloud Fetch]', e);
@@ -237,7 +268,7 @@ export default function NextDNSScreen() {
       setApiKeyModalOpen(false);
       setApiKeyInput('');
       success('Đã lưu NextDNS API Key thành công!');
-      fetchLocalConfig();
+      await fetchLocalConfig();
     } catch (e: any) {
       error(e?.message || 'Lỗi lưu API Key');
     }
@@ -277,7 +308,7 @@ export default function NextDNSScreen() {
         currentStatus ? 'DELETE' : 'POST'
       );
       setProfileData((prev: any) => {
-        const services = prev?.services || [];
+        const services = Array.isArray(prev?.services) ? prev.services : [];
         if (currentStatus) {
           return { ...prev, services: services.filter((s: any) => s.id !== serviceId) };
         }
@@ -297,7 +328,7 @@ export default function NextDNSScreen() {
         currentStatus ? 'DELETE' : 'POST'
       );
       setProfileData((prev: any) => {
-        const categories = prev?.categories || [];
+        const categories = Array.isArray(prev?.categories) ? prev.categories : [];
         if (currentStatus) {
           return { ...prev, categories: categories.filter((c: any) => c.id !== catId) };
         }
@@ -327,9 +358,9 @@ export default function NextDNSScreen() {
     try {
       await proxyNextDnsApi(`profiles/${profileId}/${listType}`, 'POST', { id: domain, active: true });
       if (listType === 'denylist') {
-        setDenylist((prev) => [...prev, { id: domain, active: true }]);
+        setDenylist((prev) => [...(Array.isArray(prev) ? prev : []), { id: domain, active: true }]);
       } else {
-        setAllowlist((prev) => [...prev, { id: domain, active: true }]);
+        setAllowlist((prev) => [...(Array.isArray(prev) ? prev : []), { id: domain, active: true }]);
       }
       setNewDomainInput('');
       success(`Đã thêm "${domain}" vào ${listType === 'denylist' ? 'Danh sách chặn' : 'Danh sách cho phép'}!`);
@@ -342,9 +373,9 @@ export default function NextDNSScreen() {
     try {
       await proxyNextDnsApi(`profiles/${profileId}/${type}/${encodeURIComponent(domain)}`, 'DELETE');
       if (type === 'denylist') {
-        setDenylist((prev) => prev.filter((d) => d.id !== domain));
+        setDenylist((prev) => (Array.isArray(prev) ? prev : []).filter((d) => d.id !== domain));
       } else {
-        setAllowlist((prev) => prev.filter((d) => d.id !== domain));
+        setAllowlist((prev) => (Array.isArray(prev) ? prev : []).filter((d) => d.id !== domain));
       }
       success(`Đã xoá "${domain}"!`);
     } catch (e: any) {
@@ -356,7 +387,7 @@ export default function NextDNSScreen() {
   const handleAddBlocklist = async (id: string) => {
     try {
       await proxyNextDnsApi(`profiles/${profileId}/privacy/blocklists`, 'POST', { id });
-      setActiveBlocklists((prev) => [...prev, { id, name: id, entries: 0, updatedOn: '', website: '', description: '' }]);
+      setActiveBlocklists((prev) => [...(Array.isArray(prev) ? prev : []), { id, name: id, entries: 0, updatedOn: '', website: '', description: '' }]);
       success('Đã thêm danh sách chặn vào Profile!');
     } catch (e: any) {
       error(e?.message || 'Lỗi thêm danh sách chặn');
@@ -366,7 +397,7 @@ export default function NextDNSScreen() {
   const handleRemoveBlocklist = async (id: string) => {
     try {
       await proxyNextDnsApi(`profiles/${profileId}/privacy/blocklists/${id}`, 'DELETE');
-      setActiveBlocklists((prev) => prev.filter((b) => b.id !== id));
+      setActiveBlocklists((prev) => (Array.isArray(prev) ? prev : []).filter((b) => b.id !== id));
       success('Đã gỡ bỏ danh sách chặn!');
     } catch (e: any) {
       error(e?.message || 'Lỗi gỡ bỏ danh sách chặn');
@@ -374,13 +405,13 @@ export default function NextDNSScreen() {
   };
 
   const filteredLogs = useMemo(() => {
-    let result = logs;
+    let result = Array.isArray(logs) ? logs : [];
     if (logFilterBlocked) {
       result = result.filter((l) => l.status === 'blocked');
     }
     if (logSearch.trim()) {
       const q = logSearch.toLowerCase();
-      result = result.filter((l) => l.domain.toLowerCase().includes(q));
+      result = result.filter((l) => (l.domain || l.root || '').toLowerCase().includes(q));
     }
     return result;
   }, [logs, logFilterBlocked, logSearch]);
@@ -412,9 +443,52 @@ export default function NextDNSScreen() {
                 {isActive ? 'ĐANG BẢO VỆ' : 'ĐÃ TẮT'}
               </span>
             </div>
-            <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">
-              <span>Profile ID: <strong>{profileId || 'Chưa thiết lập'}</strong></span>
-              {linkedIp && <span>• IP liên kết: {linkedIp}</span>}
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400 font-mono mt-1">
+              <span className="inline-flex items-center gap-1.5">
+                <span>Profile ID:</span>
+                <strong className="text-slate-800 dark:text-slate-200 tracking-wider font-bold">
+                  {profileId
+                    ? (showProfileId ? profileId : maskProfileId(profileId))
+                    : 'Chưa thiết lập'}
+                </strong>
+                {profileId && (
+                  <button
+                    type="button"
+                    onClick={() => setShowProfileId(!showProfileId)}
+                    className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 p-0.5 rounded transition-colors text-sm leading-none cursor-pointer"
+                    title={showProfileId ? 'Che Profile ID' : 'Xem đầy đủ Profile ID'}
+                    aria-label={showProfileId ? 'Che Profile ID' : 'Xem đầy đủ Profile ID'}
+                  >
+                    {showProfileId ? '🙈' : '👁️'}
+                  </button>
+                )}
+              </span>
+
+              {hasApiKey && (
+                <span className="inline-flex items-center gap-1.5">
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                  <span>API Key:</span>
+                  <strong className="text-emerald-600 dark:text-emerald-400 tracking-wider font-bold">
+                    {showApiKey ? (maskedKey || '••••••••') : '••••••••••••'}
+                  </strong>
+                  <button
+                    type="button"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 p-0.5 rounded transition-colors text-sm leading-none cursor-pointer"
+                    title={showApiKey ? 'Che API Key' : 'Hiện API Key'}
+                    aria-label={showApiKey ? 'Che API Key' : 'Hiện API Key'}
+                  >
+                    {showApiKey ? '🙈' : '👁️'}
+                  </button>
+                </span>
+              )}
+
+              {linkedIp && (
+                <span className="inline-flex items-center gap-1">
+                  <span className="text-slate-300 dark:text-slate-600">•</span>
+                  <span>IP liên kết: {linkedIp}</span>
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -560,35 +634,76 @@ export default function NextDNSScreen() {
             </div>
           </div>
 
-          {/* Top Resolved Domains */}
-          <div className="vcrt-card p-4 flex flex-col gap-3">
-            <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100">
-              Tên Miền Truy Vấn Nhiều Nhất
-            </h4>
-            {resolvedDomains.length === 0 ? (
-              <div className="text-center py-6 text-xs text-slate-400">
-                Chưa có dữ liệu thống kê tên miền.
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2">
-                {resolvedDomains.map((d, i) => (
-                  <div
-                    key={d.domain}
-                    className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs font-mono"
-                  >
-                    <div className="flex items-center gap-2 truncate">
-                      <span className="text-slate-400">{i + 1}.</span>
-                      <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
-                        {d.domain}
+          {/* Top Resolved & Blocked Domains */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Top Resolved Domains */}
+            <div className="vcrt-card p-4 flex flex-col gap-3">
+              <h4 className="font-bold text-sm text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                <span>🌐</span> Tên Miền Truy Vấn Nhiều Nhất
+              </h4>
+              {(Array.isArray(resolvedDomains) ? resolvedDomains : []).length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-400">
+                  Chưa có dữ liệu thống kê tên miền.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {(Array.isArray(resolvedDomains) ? resolvedDomains : []).map((d, i) => (
+                    <div
+                      key={d.domain || i}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs font-mono"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-slate-400">{i + 1}.</span>
+                        <span className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                          {d.domain}
+                        </span>
+                      </div>
+                      <span className="text-blue-600 dark:text-blue-400 font-bold shrink-0">
+                        {d.queries.toLocaleString()} q
                       </span>
                     </div>
-                    <span className="text-blue-600 dark:text-blue-400 font-bold shrink-0">
-                      {d.queries.toLocaleString()} q
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Top Blocked Domains */}
+            <div className="vcrt-card p-4 flex flex-col gap-3">
+              <h4 className="font-bold text-sm text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
+                <span>⛔</span> Tên Miền Bị Chặn Nhiều Nhất
+              </h4>
+              {(Array.isArray(blockedDomains) ? blockedDomains : []).length === 0 ? (
+                <div className="text-center py-6 text-xs text-slate-400">
+                  Chưa có dữ liệu tên miền bị chặn.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {(Array.isArray(blockedDomains) ? blockedDomains : []).map((d, i) => (
+                    <div
+                      key={d.domain || i}
+                      className="flex items-center justify-between p-2.5 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs font-mono"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className="text-slate-400">{i + 1}.</span>
+                        <div className="truncate">
+                          <span className="font-semibold text-rose-600 dark:text-rose-400 truncate">
+                            {d.domain}
+                          </span>
+                          {d.tracker && (
+                            <span className="text-[10px] text-slate-400 block truncate font-sans">
+                              {d.tracker}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className="text-rose-600 dark:text-rose-400 font-bold shrink-0">
+                        {d.queries.toLocaleString()} q
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}
@@ -625,14 +740,15 @@ export default function NextDNSScreen() {
 
           {/* Logs table */}
           <div className="vcrt-card overflow-hidden">
-            {filteredLogs.length === 0 ? (
+            {(Array.isArray(filteredLogs) ? filteredLogs : []).length === 0 ? (
               <div className="p-8 text-center text-xs text-slate-400">
                 Không có dữ liệu nhật ký phù hợp.
               </div>
             ) : (
               <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs max-h-[60vh] overflow-y-auto font-mono">
-                {filteredLogs.map((log, idx) => {
+                {(Array.isArray(filteredLogs) ? filteredLogs : []).map((log, idx) => {
                   const isBlocked = log.status === 'blocked';
+                  const safeReasons = Array.isArray(log.reasons) ? log.reasons : [];
                   return (
                     <div
                       key={idx}
@@ -646,11 +762,11 @@ export default function NextDNSScreen() {
                         />
                         <div className="truncate">
                           <span className="font-semibold text-slate-800 dark:text-slate-200">
-                            {log.domain}
+                            {log.domain || log.root || 'unknown'}
                           </span>
-                          {log.reasons && log.reasons.length > 0 && (
+                          {safeReasons.length > 0 && (
                             <span className="text-[10px] text-rose-500 block truncate font-sans mt-0.5">
-                              Chặn bởi: {log.reasons.map((r) => r.name || r.id).join(', ')}
+                              Chặn bởi: {safeReasons.map((r) => r.name || r.id).join(', ')}
                             </span>
                           )}
                         </div>
@@ -689,7 +805,7 @@ export default function NextDNSScreen() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {activeBlocklists.map((b) => (
+            {(Array.isArray(activeBlocklists) ? activeBlocklists : []).map((b) => (
               <div
                 key={b.id}
                 className="vcrt-card p-4 flex items-center justify-between gap-3"
@@ -698,9 +814,9 @@ export default function NextDNSScreen() {
                   <div className="font-bold text-sm text-slate-900 dark:text-slate-100">
                     {b.name || b.id}
                   </div>
-                  {b.entries > 0 && (
+                  {Number(b.entries) > 0 && (
                     <span className="text-[10px] text-blue-500 font-mono">
-                      {b.entries.toLocaleString()} quy tắc chặn
+                      {Number(b.entries).toLocaleString()} quy tắc chặn
                     </span>
                   )}
                 </div>
@@ -718,7 +834,7 @@ export default function NextDNSScreen() {
             isOpen={isAddBlocklistOpen}
             onClose={() => setIsAddBlocklistOpen(false)}
             availableBlocklists={availableBlocklists}
-            activeBlocklistIds={activeBlocklists.map((b) => b.id)}
+            activeBlocklistIds={(Array.isArray(activeBlocklists) ? activeBlocklists : []).map((b) => b.id)}
             onAddBlocklist={handleAddBlocklist}
             onRemoveBlocklist={handleRemoveBlocklist}
           />
@@ -734,7 +850,7 @@ export default function NextDNSScreen() {
             </h3>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5">
               {POPULAR_SERVICES.map((s) => {
-                const blocked = !!profileData?.services?.some((item: any) => item.id === s.id);
+                const blocked = Array.isArray(profileData?.services) && profileData.services.some((item: any) => item.id === s.id);
                 return (
                   <button
                     key={s.id}
@@ -765,7 +881,7 @@ export default function NextDNSScreen() {
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {CATEGORIES.map((c) => {
-                const blocked = !!profileData?.categories?.some((item: any) => item.id === c.id);
+                const blocked = Array.isArray(profileData?.categories) && profileData.categories.some((item: any) => item.id === c.id);
                 return (
                   <div
                     key={c.id}
@@ -861,13 +977,13 @@ export default function NextDNSScreen() {
             {/* Denylist */}
             <div className="vcrt-card p-4 flex flex-col gap-3">
               <h4 className="font-bold text-sm text-rose-600 dark:text-rose-400 flex items-center gap-1.5">
-                <span>⛔</span> Danh Sách Chặn Riêng ({denylist.length})
+                <span>⛔</span> Danh Sách Chặn Riêng ({(Array.isArray(denylist) ? denylist : []).length})
               </h4>
               <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto pr-1">
-                {denylist.length === 0 ? (
+                {(Array.isArray(denylist) ? denylist : []).length === 0 ? (
                   <div className="text-xs text-slate-400 py-4 text-center">Chưa có tên miền chặn</div>
                 ) : (
-                  denylist.map((d) => (
+                  (Array.isArray(denylist) ? denylist : []).map((d) => (
                     <div
                       key={d.id}
                       className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs font-mono"
@@ -888,13 +1004,13 @@ export default function NextDNSScreen() {
             {/* Allowlist */}
             <div className="vcrt-card p-4 flex flex-col gap-3">
               <h4 className="font-bold text-sm text-emerald-600 dark:text-emerald-400 flex items-center gap-1.5">
-                <span>✅</span> Danh Sách Cho Phép (Ngoại lệ) ({allowlist.length})
+                <span>✅</span> Danh Sách Cho Phép (Ngoại lệ) ({(Array.isArray(allowlist) ? allowlist : []).length})
               </h4>
               <div className="flex flex-col gap-1.5 max-h-80 overflow-y-auto pr-1">
-                {allowlist.length === 0 ? (
+                {(Array.isArray(allowlist) ? allowlist : []).length === 0 ? (
                   <div className="text-xs text-slate-400 py-4 text-center">Chưa có tên miền ngoại lệ</div>
                 ) : (
-                  allowlist.map((d) => (
+                  (Array.isArray(allowlist) ? allowlist : []).map((d) => (
                     <div
                       key={d.id}
                       className="flex items-center justify-between p-2 rounded-lg bg-slate-50 dark:bg-slate-800/60 text-xs font-mono"
@@ -918,12 +1034,18 @@ export default function NextDNSScreen() {
       {/* Modal Profile ID */}
       <Modal
         isOpen={profileModalOpen}
-        onClose={() => setProfileModalOpen(false)}
+        onClose={() => {
+          setProfileModalOpen(false);
+          setShowProfileInput(false);
+        }}
         title="Cấu Hình NextDNS Profile ID"
         footer={
           <>
             <button
-              onClick={() => setProfileModalOpen(false)}
+              onClick={() => {
+                setProfileModalOpen(false);
+                setShowProfileInput(false);
+              }}
               className="vcrt-btn vcrt-btn-secondary text-xs"
             >
               Hủy
@@ -939,24 +1061,38 @@ export default function NextDNSScreen() {
       >
         <div className="flex flex-col gap-3 text-xs">
           <p className="text-slate-600 dark:text-slate-400">
-            Nhập <strong>Profile ID</strong> (chuỗi 6 ký tự hex, vd: <code>2512a8</code>) tạo từ tài khoản NextDNS của bạn:
+            Nhập <strong>Profile ID</strong> (chuỗi 6 ký tự hex, vd: <code>12ab34</code>) tạo từ tài khoản NextDNS của bạn:
           </p>
-          <input
-            type="text"
-            maxLength={10}
-            className="vcrt-input font-mono text-base uppercase"
-            placeholder="vd: 2512A8"
-            value={profileInput}
-            onChange={(e) => setProfileInput(e.target.value)}
-            autoFocus
-          />
+          <div className="relative">
+            <input
+              type={showProfileInput ? "text" : "password"}
+              maxLength={10}
+              className="vcrt-input font-mono text-base uppercase pr-10 tracking-wider"
+              placeholder="vd: 12AB34"
+              value={profileInput}
+              onChange={(e) => setProfileInput(e.target.value)}
+              autoFocus
+            />
+            <button
+              type="button"
+              onClick={() => setShowProfileInput(!showProfileInput)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm cursor-pointer"
+              title={showProfileInput ? "Che Profile ID" : "Hiện Profile ID"}
+            >
+              {showProfileInput ? '🙈' : '👁️'}
+            </button>
+          </div>
         </div>
       </Modal>
 
       {/* Modal API Key */}
       <Modal
         isOpen={apiKeyModalOpen}
-        onClose={() => setApiKeyModalOpen(false)}
+        onClose={() => {
+          setApiKeyModalOpen(false);
+          setShowApiKeyInput(false);
+          setShowApiKeyInModal(false);
+        }}
         title="Quản Lý NextDNS API Key"
         footer={
           <>
@@ -969,7 +1105,11 @@ export default function NextDNSScreen() {
               </button>
             )}
             <button
-              onClick={() => setApiKeyModalOpen(false)}
+              onClick={() => {
+                setApiKeyModalOpen(false);
+                setShowApiKeyInput(false);
+                setShowApiKeyInModal(false);
+              }}
               className="vcrt-btn vcrt-btn-secondary text-xs"
             >
               Hủy
@@ -985,20 +1125,38 @@ export default function NextDNSScreen() {
       >
         <div className="flex flex-col gap-3 text-xs">
           {hasApiKey && maskedKey && (
-            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-700/50 font-mono text-emerald-600 dark:text-emerald-400">
-              Đang sử dụng: {maskedKey}
+            <div className="p-2.5 rounded-lg bg-slate-50 dark:bg-slate-700/50 font-mono text-emerald-600 dark:text-emerald-400 flex items-center justify-between">
+              <span>Đang sử dụng: <strong>{showApiKeyInModal ? maskedKey : '••••••••••••'}</strong></span>
+              <button
+                type="button"
+                onClick={() => setShowApiKeyInModal(!showApiKeyInModal)}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm ml-2 cursor-pointer"
+                title={showApiKeyInModal ? "Che API Key" : "Hiện một phần API Key"}
+              >
+                {showApiKeyInModal ? '🙈' : '👁️'}
+              </button>
             </div>
           )}
           <p className="text-slate-600 dark:text-slate-400">
             Lấy API Key tại <strong>NextDNS Account → API Keys</strong> để router có quyền truy vấn dữ liệu từ NextDNS Cloud:
           </p>
-          <input
-            type="password"
-            className="vcrt-input font-mono"
-            placeholder="Nhập API Key mới..."
-            value={apiKeyInput}
-            onChange={(e) => setApiKeyInput(e.target.value)}
-          />
+          <div className="relative">
+            <input
+              type={showApiKeyInput ? "text" : "password"}
+              className="vcrt-input font-mono pr-10"
+              placeholder="Nhập API Key mới..."
+              value={apiKeyInput}
+              onChange={(e) => setApiKeyInput(e.target.value)}
+            />
+            <button
+              type="button"
+              onClick={() => setShowApiKeyInput(!showApiKeyInput)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm cursor-pointer"
+              title={showApiKeyInput ? "Che API Key" : "Hiện API Key"}
+            >
+              {showApiKeyInput ? '🙈' : '👁️'}
+            </button>
+          </div>
         </div>
       </Modal>
     </div>

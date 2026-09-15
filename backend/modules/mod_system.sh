@@ -10,6 +10,8 @@
 : "${PORT_LAN1:=0}"
 : "${PORT_LAN2:=1}"
 : "${THERMAL_PATH:=/sys/class/thermal/thermal_zone0/temp}"
+: "${NEXTDNS_CONF_FILE:=/etc/vcrt_nextdns_profile}"
+: "${NEXTDNS_LINKED_IP_TMP:=/tmp/vcrt_nextdns_linked_ip.tmp}"
 
 handle_status() {
     # 1. Real Uptime
@@ -231,7 +233,21 @@ handle_status() {
 
     # 12. NextDNS Status
     local ndns_active="false" ndns_info="Chưa bật"
-    pidof nextdns >/dev/null 2>&1 && { ndns_active="true"; ndns_info="NextDNS Daemon đang hoạt động 🟢"; }
+    local cur_prof=""
+    [ -f "$NEXTDNS_CONF_FILE" ] && cur_prof=$(cat "$NEXTDNS_CONF_FILE" 2>/dev/null | tr -d ' \r\n')
+    if [ -n "$cur_prof" ] && { [ -f /etc/dnsmasq.d/nextdns.conf ] || grep -q "NEXTDNS_START" /etc/dnsmasq.conf 2>/dev/null; }; then
+        ndns_active="true"
+        local lip=""
+        [ -f "$NEXTDNS_LINKED_IP_TMP" ] && lip=$(cat "$NEXTDNS_LINKED_IP_TMP" 2>/dev/null | tr -d ' \r\n')
+        if [ -n "$lip" ]; then
+            ndns_info="Profile: $cur_prof ($lip)"
+        else
+            ndns_info="Profile: $cur_prof"
+        fi
+    elif pidof nextdns >/dev/null 2>&1; then
+        ndns_active="true"
+        ndns_info="NextDNS Daemon 🟢"
+    fi
 
     # 13. Network live & traffic calculations from mod_network
     calc_network_stats "$wan_iface"

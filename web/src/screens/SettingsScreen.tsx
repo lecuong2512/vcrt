@@ -16,6 +16,7 @@ import {
 } from '../api/update';
 import {
   getZeroTierStatus,
+  controlZeroTierService,
   joinZeroTierNetwork,
   leaveZeroTierNetwork,
   ZeroTierStatus
@@ -58,6 +59,7 @@ export default function SettingsScreen() {
   const [ztStatus, setZtStatus] = useState<ZeroTierStatus | null>(null);
   const [ztNetworkIdInput, setZtNetworkIdInput] = useState('');
   const [ztLoading, setZtLoading] = useState(false);
+  const [ztServiceLoading, setZtServiceLoading] = useState(false);
 
   // Load initial data
   useEffect(() => {
@@ -237,19 +239,52 @@ export default function SettingsScreen() {
     }
   };
 
-  // ZeroTier Join / Leave
+  // ZeroTier Service Control & Join / Leave
+  const handleToggleZeroTierService = async () => {
+    const targetState = ztStatus?.running ? 'stop' : 'start';
+    setZtServiceLoading(true);
+    try {
+      const res: any = await controlZeroTierService(targetState);
+      if (res && res.status === 'error') {
+        error(res.message || 'Lỗi điều khiển dịch vụ ZeroTier');
+        setZtServiceLoading(false);
+        return;
+      }
+      success(
+        targetState === 'start'
+          ? 'Đang khởi động dịch vụ ZeroTier...'
+          : 'Đã dừng dịch vụ ZeroTier!'
+      );
+      setTimeout(async () => {
+        const statusRes = await getZeroTierStatus();
+        if (statusRes) setZtStatus(statusRes);
+        setZtServiceLoading(false);
+      }, 2000);
+    } catch (e: any) {
+      error(e?.message || 'Lỗi điều khiển dịch vụ ZeroTier');
+      setZtServiceLoading(false);
+    }
+  };
+
   const handleJoinZeroTier = async () => {
-    if (!ztNetworkIdInput.trim() || ztNetworkIdInput.trim().length !== 16) {
+    const cleanId = ztNetworkIdInput.trim();
+    if (!cleanId || cleanId.length !== 16) {
       error('Network ID của ZeroTier phải là chuỗi 16 ký tự hex!');
       return;
     }
     setZtLoading(true);
     try {
-      await joinZeroTierNetwork(ztNetworkIdInput.trim());
-      success(`Đã gửi lệnh gia nhập mạng ZeroTier: ${ztNetworkIdInput}!`);
+      const res: any = await joinZeroTierNetwork(cleanId);
+      if (res && res.status === 'error') {
+        error(res.message || 'Không thể gia nhập mạng ZeroTier');
+        return;
+      }
+      success(`Đã gửi lệnh gia nhập mạng ZeroTier: ${cleanId}!`);
       setZtNetworkIdInput('');
-      const res = await getZeroTierStatus();
-      if (res) setZtStatus(res);
+      setTimeout(async () => {
+        const statusRes = await getZeroTierStatus();
+        if (statusRes) setZtStatus(statusRes);
+      }, 2500);
     } catch (e: any) {
       error(e?.message || 'Lỗi gia nhập mạng ZeroTier');
     } finally {
@@ -261,10 +296,16 @@ export default function SettingsScreen() {
     if (!window.confirm(`Bạn có chắc muốn rời khỏi mạng ZeroTier ${nwid}?`)) return;
     setZtLoading(true);
     try {
-      await leaveZeroTierNetwork(nwid);
+      const res: any = await leaveZeroTierNetwork(nwid);
+      if (res && res.status === 'error') {
+        error(res.message || 'Lỗi rời mạng ZeroTier');
+        return;
+      }
       success(`Đã rời khỏi mạng ${nwid}!`);
-      const res = await getZeroTierStatus();
-      if (res) setZtStatus(res);
+      setTimeout(async () => {
+        const statusRes = await getZeroTierStatus();
+        if (statusRes) setZtStatus(statusRes);
+      }, 1500);
     } catch (e: any) {
       error(e?.message || 'Lỗi rời mạng ZeroTier');
     } finally {
@@ -303,22 +344,59 @@ export default function SettingsScreen() {
             </div>
           </div>
 
-          <span
-            className={`vcrt-badge ${
-              ztStatus?.running
-                ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
-                : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
-            }`}
-          >
-            {ztStatus?.running ? 'ONLINE' : 'STOPPED'}
-          </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={handleToggleZeroTierService}
+              disabled={ztServiceLoading}
+              className={`vcrt-btn text-xs py-1 px-3 transition-colors ${
+                ztStatus?.running
+                  ? 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-800 hover:bg-rose-100 dark:hover:bg-rose-900/50'
+                  : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/50'
+              }`}
+            >
+              {ztServiceLoading
+                ? 'Đang xử lý...'
+                : ztStatus?.running
+                ? 'Dừng Dịch Vụ'
+                : 'Khởi Động Dịch Vụ'}
+            </button>
+            <span
+              className={`vcrt-badge ${
+                !ztStatus?.running
+                  ? 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
+                  : ztStatus?.online_status === 'ONLINE'
+                  ? 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800'
+                  : 'bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800'
+              }`}
+              title={
+                !ztStatus?.running
+                  ? 'Dịch vụ ZeroTier đang dừng'
+                  : ztStatus?.online_status === 'ONLINE'
+                  ? 'ZeroTier đã kết nối mạng toàn cầu thành công'
+                  : 'Chưa kết nối máy chủ ZeroTier, kiểm tra kết nối mạng'
+              }
+            >
+              {!ztStatus?.running
+                ? 'STOPPED'
+                : ztStatus?.online_status === 'ONLINE'
+                ? 'ONLINE'
+                : 'OFFLINE'}
+            </span>
+          </div>
         </div>
+
+        {ztStatus?.running && ztStatus?.online_status === 'OFFLINE' && (
+          <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800 text-xs text-amber-800 dark:text-amber-300 flex items-center gap-2">
+            <span>⚠️</span>
+            <span>ZeroTier Daemon đang chạy nhưng chưa kết nối được máy chủ toàn cầu (OFFLINE). Vui lòng kiểm tra kết nối Internet router hoặc cổng UDP 9993.</span>
+          </div>
+        )}
 
         {ztStatus?.node_id && (
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
             <span className="text-slate-500 dark:text-slate-400">Router Node ID:</span>
             <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
-              {ztStatus.node_id} (v{ztStatus.version || '1.14'})
+              {ztStatus.node_id} (v{ztStatus.version || '1.16'})
             </span>
           </div>
         )}
@@ -349,44 +427,125 @@ export default function SettingsScreen() {
               Mạng ZeroTier Đã Tham Gia:
             </h4>
             <div className="flex flex-col gap-2">
-              {ztStatus.networks.map((net) => (
-                <div
-                  key={net.nwid}
-                  className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
-                        {net.nwid}
-                      </span>
-                      <span className="vcrt-badge bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px]">
-                        {net.status}
-                      </span>
-                    </div>
-                    {net.assigned_ip && (
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-slate-400">IP ảo Router:</span>
-                        <span className="font-mono font-bold text-emerald-600 dark:text-emerald-400">
-                          {net.assigned_ip}
+              {ztStatus.networks.map((net) => {
+                const st = (net.status || '').toUpperCase();
+                const isDenied = st === 'ACCESS_DENIED';
+                const isOk = st === 'OK';
+                const isSyncing = st === 'REQUESTING_CONFIGURATION';
+                const isNotFound = st === 'NOT_FOUND';
+
+                return (
+                  <div
+                    key={net.nwid}
+                    className="p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50/50 dark:bg-slate-800/40 flex flex-col gap-2 text-xs"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                          {net.nwid}
                         </span>
-                        <button
-                          onClick={() => copyToClipboard(net.assigned_ip)}
-                          className="text-[10px] text-blue-500 hover:underline"
-                        >
-                          Sao chép
-                        </button>
+                        {net.name && (
+                          <span className="px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-950 text-indigo-700 dark:text-indigo-300 font-bold text-[11px]">
+                            {net.name}
+                          </span>
+                        )}
+                        {isOk && (
+                          <span className="vcrt-badge bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 text-[10px]">
+                            HOẠT ĐỘNG (OK)
+                          </span>
+                        )}
+                        {isDenied && (
+                          <span className="vcrt-badge bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border border-amber-300 dark:border-amber-800 text-[10px]">
+                            CHỜ DUYỆT (ACCESS DENIED)
+                          </span>
+                        )}
+                        {isSyncing && (
+                          <span className="vcrt-badge bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 text-[10px]">
+                            ĐANG ĐỒNG BỘ
+                          </span>
+                        )}
+                        {isNotFound && (
+                          <span className="vcrt-badge bg-rose-100 dark:bg-rose-950/60 text-rose-700 dark:text-rose-300 border border-rose-300 dark:border-rose-800 text-[10px]">
+                            KHÔNG TÌM THẤY (NOT FOUND)
+                          </span>
+                        )}
+                        {!isOk && !isDenied && !isSyncing && !isNotFound && (
+                          <span className="vcrt-badge bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 text-[10px]">
+                            {net.status || 'UNKNOWN'}
+                          </span>
+                        )}
                       </div>
+
+                      <button
+                        onClick={() => handleLeaveZeroTier(net.nwid)}
+                        className="text-rose-600 dark:text-rose-400 hover:underline text-xs self-end sm:self-auto"
+                      >
+                        Rời Mạng
+                      </button>
+                    </div>
+
+                    {(net.assigned_ip || net.ip) && (() => {
+                      const cleanIp = net.ip || (net.assigned_ip ? net.assigned_ip.split('/')[0] : '');
+                      return (
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 mt-1">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-slate-600 dark:text-slate-300 font-medium">IP ảo Router:</span>
+                            <span className="font-mono font-extrabold text-emerald-600 dark:text-emerald-400 text-sm">
+                              {cleanIp}
+                            </span>
+                            {net.assigned_ip && net.assigned_ip.includes('/') && (
+                              <span className="text-[10px] font-mono text-slate-400">
+                                /{net.assigned_ip.split('/')[1]}
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => copyToClipboard(cleanIp)}
+                              className="px-2.5 py-1 rounded bg-emerald-600 hover:bg-emerald-700 text-white text-[11px] font-medium transition-colors flex items-center gap-1 shadow-sm"
+                              title="Sao chép địa chỉ IP ảo ZeroTier để truy cập router từ xa"
+                            >
+                              <span>📋</span> Sao chép IP
+                            </button>
+                            <a
+                              href={`http://${cleanIp}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="px-2.5 py-1 rounded bg-slate-200 dark:bg-slate-700 hover:bg-slate-300 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 text-[11px] font-medium transition-colors flex items-center gap-1"
+                              title="Mở giao diện VCRT từ xa qua mạng ảo ZeroTier"
+                            >
+                              <span>🌐</span> Mở VCRT
+                            </a>
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {isDenied && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40 p-2 rounded-lg border border-amber-200 dark:border-amber-900 flex items-start gap-1.5">
+                        <span>⚠️</span>
+                        <span>
+                          Hãy vào <strong>my.zerotier.com</strong>, mở Network này và tích chọn checkbox <strong>Auth</strong> cho Node ID: <code className="font-bold underline">{ztStatus.node_id}</code>.
+                        </span>
+                      </p>
+                    )}
+
+                    {isNotFound && (
+                      <p className="text-[11px] text-rose-500 bg-rose-50 dark:bg-rose-950/40 p-2 rounded-lg border border-rose-200 dark:border-rose-900 flex items-start gap-1.5">
+                        <span>❌</span>
+                        <span>Mã Network ID không tồn tại hoặc đã bị xoá khỏi ZeroTier Central. Vui lòng kiểm tra lại 16 ký tự Network ID.</span>
+                      </p>
+                    )}
+
+                    {isSyncing && (
+                      <p className="text-[11px] text-blue-500 bg-blue-50 dark:bg-blue-950/40 p-2 rounded-lg border border-blue-200 dark:border-blue-900 flex items-start gap-1.5">
+                        <span className="animate-spin">⏳</span>
+                        <span>Đang đồng bộ cấu hình tuyến đường và IP ảo từ máy chủ quản trị...</span>
+                      </p>
                     )}
                   </div>
-
-                  <button
-                    onClick={() => handleLeaveZeroTier(net.nwid)}
-                    className="text-rose-600 dark:text-rose-400 hover:underline text-xs self-end sm:self-auto"
-                  >
-                    Rời Mạng
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         )}
@@ -427,7 +586,7 @@ export default function SettingsScreen() {
             <input
               type="password"
               className="vcrt-input font-mono text-xs"
-              placeholder={tgConfig?.has_token ? `Đang dùng: ${tgConfig.token_masked}` : 'vd: 742789:AA...'}
+              placeholder={tgConfig?.has_token ? `Đang dùng: ${tgConfig.token_masked}` : 'vd: 1234567890:ABC-DEF...'}
               value={tgToken}
               onChange={(e) => setTgToken(e.target.value)}
             />

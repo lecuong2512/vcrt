@@ -18,7 +18,7 @@ PARAM_CH24="" PARAM_BAND="" PARAM_BSSID="" PARAM_KEY="" PARAM_MINUTES=""
 PARAM_NAME="" PARAM_IP="" PARAM_USER="" PARAM_PASS="" PARAM_NEW_PASS=""
 PARAM_TOKEN="" PARAM_BOT_TOKEN="" PARAM_CHAT_ID="" PARAM_NOTIF_WIFI=""
 PARAM_NOTIF_EXPIRE="" PARAM_NOTIF_DAILY="" PARAM_DAILY_HOUR=""
-PARAM_BOT_ENABLED="" PARAM_AUTO_UPDATE="" PARAM_ENABLED=""
+PARAM_BOT_ENABLED="" PARAM_AUTO_UPDATE="" PARAM_ENABLED="" PARAM_STATE=""
 
 OLD_IFS="$IFS"
 IFS='&'
@@ -60,6 +60,7 @@ for item in $QUERY_STRING; do
         bot_enabled=*) PARAM_BOT_ENABLED="${item#bot_enabled=}" ;;
         auto_update=*) PARAM_AUTO_UPDATE="${item#auto_update=}" ;;
         enabled=*) PARAM_ENABLED="${item#enabled=}" ;;
+        state=*) PARAM_STATE="${item#state=}" ;;
     esac
 done
 IFS="$OLD_IFS"
@@ -203,6 +204,9 @@ case "$ACTION" in
         ;;
     zerotier_get)
         handle_zerotier_get
+        ;;
+    zerotier_service)
+        handle_zerotier_service
         ;;
     zerotier_join)
         handle_zerotier_join

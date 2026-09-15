@@ -33,20 +33,98 @@ handle_wifi_get() {
     [ -z "$sec5" ] && sec5="wireless.default_${RADIO_5G}"
     [ -z "$sec24" ] && sec24="wireless.default_${RADIO_24G}"
 
-    local ssid5 pass5 ch5 power5 ssid24 pass24 ch24 power24
-    ssid5=$(uci -q get "${sec5}.ssid")
-    pass5=$(uci -q get "${sec5}.key")
-    ch5=$(uci -q get "wireless.${RADIO_5G}.channel" || echo "auto")
-    power5=$(uci -q get "wireless.${RADIO_5G}.txpower")
-    [ -z "$power5" ] && power5=$(iwinfo "$IFACE_5G" info 2>/dev/null | awk '/Tx-Power:/{print $2}')
+    # Doc cau hinh tu UCI
+    local uci_ssid5 uci_pass5 conf_ch5 uci_power5
+    uci_ssid5=$(uci -q get "${sec5}.ssid")
+    uci_pass5=$(uci -q get "${sec5}.key")
+    conf_ch5=$(uci -q get "wireless.${RADIO_5G}.channel")
+    [ -z "$conf_ch5" ] && conf_ch5="auto"
+    uci_power5=$(uci -q get "wireless.${RADIO_5G}.txpower")
+
+    local uci_ssid24 uci_pass24 conf_ch24 uci_power24
+    uci_ssid24=$(uci -q get "${sec24}.ssid")
+    uci_pass24=$(uci -q get "${sec24}.key")
+    conf_ch24=$(uci -q get "wireless.${RADIO_24G}.channel")
+    [ -z "$conf_ch24" ] && conf_ch24="auto"
+    uci_power24=$(uci -q get "wireless.${RADIO_24G}.txpower")
+
+    # Do tim thuc te tat ca interface qua iwinfo va iw dev
+    local real_ssid5="" real_ch5="" real_power5="" ifc5=""
+    local real_ssid24="" real_ch24="" real_power24="" ifc24=""
+
+    local ifc_list=""
+    if command -v iw >/dev/null 2>&1; then
+        ifc_list=$(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}')
+    fi
+    if [ -z "$ifc_list" ]; then
+        ifc_list=$(ls /sys/class/net 2>/dev/null | grep -E '^wlan|^phy|^ra')
+    fi
+
+    local ifc
+    for ifc in $ifc_list; do
+        case "$ifc" in *sta*|*mon*) continue ;; esac
+
+        local info="" mode=""
+        if command -v iwinfo >/dev/null 2>&1; then
+            info=$(iwinfo "$ifc" info 2>/dev/null)
+            mode=$(echo "$info" | awk -F'Mode:' '{print $2}' | awk '{print $1}')
+        fi
+        if [ -z "$mode" ] && command -v iw >/dev/null 2>&1; then
+            mode=$(iw dev "$ifc" info 2>/dev/null | awk '$1=="type"{print $2}')
+        fi
+
+        case "$mode" in
+            Master|AP|ap) ;;
+            *) continue ;;
+        esac
+
+        local ch="" pwr="" essid="" is_5g=0
+        ch=$(echo "$info" | awk -F'Channel:' '{print $2}' | awk '{print $1}' | tr -dc '0-9')
+        [ -z "$ch" ] && ch=$(iw dev "$ifc" info 2>/dev/null | awk '/channel/{print $2}' | tr -dc '0-9')
+
+        pwr=$(echo "$info" | awk -F'Tx-Power:' '{print $2}' | awk '{print $1}' | tr -dc '0-9')
+        [ -z "$pwr" ] && pwr=$(iw dev "$ifc" info 2>/dev/null | awk '/txpower/{print $2}' | cut -d. -f1 | tr -dc '0-9')
+
+        essid=$(echo "$info" | grep -o 'ESSID: "[^"]*"' | cut -d'"' -f2)
+        [ -z "$essid" ] && essid=$(iw dev "$ifc" info 2>/dev/null | awk '/ssid/{print $2}')
+
+        if [ -n "$ch" ] && [ "$ch" -gt 14 ] 2>/dev/null; then
+            is_5g=1
+        elif echo "$info" | grep -qiE "5\.[0-9]|5GHz|5[0-9]{3} *MHz"; then
+            is_5g=1
+        elif iw dev "$ifc" info 2>/dev/null | grep -qiE "5[0-9]{3} *MHz"; then
+            is_5g=1
+        fi
+
+        if [ "$is_5g" -eq 1 ]; then
+            [ -z "$real_ch5" ] && real_ch5="$ch"
+            [ -z "$real_power5" ] && real_power5="$pwr"
+            [ -z "$real_ssid5" ] && real_ssid5="$essid"
+            [ -z "$ifc5" ] && ifc5="$ifc"
+        else
+            [ -z "$real_ch24" ] && real_ch24="$ch"
+            [ -z "$real_power24" ] && real_power24="$pwr"
+            [ -z "$real_ssid24" ] && real_ssid24="$essid"
+            [ -z "$ifc24" ] && ifc24="$ifc"
+        fi
+    done
+
+    [ -n "$ifc5" ] && IFACE_5G="$ifc5"
+    [ -n "$ifc24" ] && IFACE_24G="$ifc24"
+
+    local ssid5 pass5 ch5 power5
+    ssid5="${real_ssid5:-$uci_ssid5}"
+    pass5="$uci_pass5"
+    ch5="${real_ch5:-$conf_ch5}"
+    power5="${real_power5:-$uci_power5}"
     [ -z "$power5" ] && power5="20"
 
-    ssid24=$(uci -q get "${sec24}.ssid")
-    pass24=$(uci -q get "${sec24}.key")
-    ch24=$(uci -q get "wireless.${RADIO_24G}.channel" || echo "6")
-    power24=$(uci -q get "wireless.${RADIO_24G}.txpower")
-    [ -z "$power24" ] && power24=$(iwinfo "$IFACE_24G" info 2>/dev/null | awk '/Tx-Power:/{print $2}')
-    [ -z "$power24" ] && power24="23"
+    local ssid24 pass24 ch24 power24
+    ssid24="${real_ssid24:-$uci_ssid24}"
+    pass24="$uci_pass24"
+    ch24="${real_ch24:-$conf_ch24}"
+    power24="${real_power24:-$uci_power24}"
+    [ -z "$power24" ] && power24="20"
 
     cat << EOF
 {
@@ -54,17 +132,24 @@ handle_wifi_get() {
     "ssid": "$(json_escape "$ssid5")",
     "pass": "$(json_escape "$pass5")",
     "channel": "$(json_escape "$ch5")",
-    "power": "$(json_escape "$power5")"
+    "configured_channel": "$(json_escape "$conf_ch5")",
+    "real_channel": "$(json_escape "$real_ch5")",
+    "power": "$(json_escape "$power5")",
+    "interface": "$(json_escape "$IFACE_5G")"
   },
   "wifi24": {
     "ssid": "$(json_escape "$ssid24")",
     "pass": "$(json_escape "$pass24")",
     "channel": "$(json_escape "$ch24")",
-    "power": "$(json_escape "$power24")"
+    "configured_channel": "$(json_escape "$conf_ch24")",
+    "real_channel": "$(json_escape "$real_ch24")",
+    "power": "$(json_escape "$power24")",
+    "interface": "$(json_escape "$IFACE_24G")"
   }
 }
 EOF
 }
+
 
 handle_wifi_apply() {
     _detect_radios
@@ -138,8 +223,8 @@ handle_wifi_scan() {
             s_ifname="$ifc"; break
         fi
     done
-    [ -z "$s_ifname" ] && [ "$scan_band" = "5g" ] && s_ifname="wlan1"
-    [ -z "$s_ifname" ] && s_ifname="wlan0"
+    [ -z "$s_ifname" ] && [ "$scan_band" = "5g" ] && s_ifname="${IFACE_5G:-wlan1}"
+    [ -z "$s_ifname" ] && s_ifname="${IFACE_24G:-wlan0}"
 
     local scan_out="" networks_json=""
     if command -v iwinfo >/dev/null 2>&1; then

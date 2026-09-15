@@ -4,7 +4,10 @@ export interface WifiBandConfig {
   ssid: string;
   pass: string;
   channel: string;
+  configured_channel?: string;
+  real_channel?: string;
   power: string;
+  interface?: string;
 }
 
 export interface WifiStatusResponse {

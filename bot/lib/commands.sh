@@ -511,31 +511,50 @@ cmd_nextdns() {
     local prof=""
     [ -f "$conf_file" ] && prof=$(cat "$conf_file" 2>/dev/null | tr -d ' \r\n')
     [ -z "$prof" ] && [ -f /etc/dnsmasq.conf ] && prof=$(grep "add-cpe-id=" /etc/dnsmasq.conf 2>/dev/null | head -n1 | cut -d= -f2 | tr -d ' \r\n')
-    [ -z "$prof" ] && prof="Chưa cấu hình"
 
     local linked_ip=""
     [ -f "$linked_tmp" ] && linked_ip=$(cat "$linked_tmp" 2>/dev/null | tr -d '\r\n')
-    [ -z "$linked_ip" ] && linked_ip="Chưa kích hoạt"
 
-    # Kiểm tra trực tiếp NextDNS
-    local test_json
-    test_json=$(curl -s --max-time 4 "https://test.nextdns.io" 2>/dev/null)
+    local is_active=0
+    if grep -q "45.90.28.0" /etc/dnsmasq.conf /etc/dnsmasq.d/nextdns.conf 2>/dev/null && pgrep -f dnsmasq >/dev/null 2>&1; then
+        is_active=1
+    fi
+
     local status_badge="🔴 Chưa kết nối"
     local protocol="N/A"
-    local test_prof="N/A"
+    if [ "$is_active" = "1" ] && [ -n "$prof" ]; then
+        status_badge="🟢 Đang kích hoạt & Bảo vệ"
+        protocol="DNS Anycast (Port 53)"
+        if [ -n "$linked_ip" ]; then
+            protocol="DNS Anycast (Linked IP)"
+        fi
+    fi
 
+    local test_json
+    test_json=$(curl -s --max-time 4 "https://test.nextdns.io" 2>/dev/null)
     if printf '%s' "$test_json" | grep -q '"status":"ok"'; then
         status_badge="🟢 Đang kích hoạt & Bảo vệ"
-        protocol=$(printf '%s' "$test_json" | grep -o '"protocol":"[^"]*"' | cut -d'"' -f4)
-        test_prof=$(printf '%s' "$test_json" | grep -o '"profile":"[^"]*"' | cut -d'"' -f4)
+        local p
+        p=$(printf '%s' "$test_json" | grep -o '"protocol":"[^"]*"' | cut -d'"' -f4)
+        [ -n "$p" ] && protocol="$p"
+    fi
+
+    local prof_display="<code>Chưa cấu hình</code>"
+    if [ -n "$prof" ] && [ "$prof" != "Chưa cấu hình" ]; then
+        prof_display="<tg-spoiler>${prof}</tg-spoiler>"
+    fi
+
+    local lip_display="<code>Chưa kích hoạt</code>"
+    if [ -n "$linked_ip" ] && [ "$linked_ip" != "Chưa kích hoạt" ]; then
+        lip_display="<tg-spoiler>${linked_ip}</tg-spoiler>"
     fi
 
     local msg="🛡 <b>TRẠNG THÁI NEXTDNS SECURITY CLOUD</b>
 ━━━━━━━━━━━━━━━━━━
-🏷 <b>Mã Profile:</b> <code>${prof}</code>
+🏷 <b>Mã Profile:</b> ${prof_display}
 📶 <b>Tình trạng:</b> ${status_badge}
 ⚡ <b>Giao thức DNS:</b> <code>${protocol}</code>
-🔗 <b>Linked IP:</b> <code>${linked_ip}</code>
+🔗 <b>Linked IP:</b> ${lip_display}
 ━━━━━━━━━━━━━━━━━━
 <i>Chặn quảng cáo, mã độc và quản lý trẻ em từ đám mây NextDNS</i>"
     send_msg "$msg" "$target_chat"

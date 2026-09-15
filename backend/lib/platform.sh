@@ -64,3 +64,5 @@ detect_platform() {
             ;;
     esac
 }
+
+detect_platform

@@ -3,8 +3,8 @@
 # File: /etc/vcrt/telegram.conf
 # ==============================================================================
 BOT_ENABLED=0
-BOT_TOKEN=""
-CHAT_ID=""
+BOT_TOKEN="YOUR_BOT_TOKEN"
+CHAT_ID="YOUR_CHAT_ID"
 NOTIF_WIFI_JOIN=1
 NOTIF_BLOCK_EXPIRE=1
 NOTIF_DAILY_REPORT=1

@@ -92,14 +92,18 @@ export default function DashboardScreen() {
   }));
 
   // Chuẩn bị dữ liệu lịch sử lưu lượng theo tab chu kỳ
-  const periodStats: TrafficHistoryItem[] =
-    status?.traffic_stats?.[trafficPeriod] || [
-      { label: '00:00', dl: 0, ul: 0 },
-      { label: '06:00', dl: 0, ul: 0 },
-      { label: '12:00', dl: 0, ul: 0 },
-      { label: '18:00', dl: 0, ul: 0 },
-      { label: '23:59', dl: 0, ul: 0 }
-    ];
+  const currentPeriodData = status?.traffic_stats?.[trafficPeriod];
+  const periodStats: TrafficHistoryItem[] = Array.isArray(currentPeriodData)
+    ? currentPeriodData
+    : Array.isArray((currentPeriodData as any)?.points)
+    ? (currentPeriodData as any).points
+    : [
+        { label: '00:00', dl: 0, ul: 0 },
+        { label: '06:00', dl: 0, ul: 0 },
+        { label: '12:00', dl: 0, ul: 0 },
+        { label: '18:00', dl: 0, ul: 0 },
+        { label: '23:59', dl: 0, ul: 0 }
+      ];
 
   // Tính phần trăm RAM
   const ramTotal = status?.ram_total || 128;
@@ -223,8 +227,8 @@ export default function DashboardScreen() {
           </div>
           <div className="my-2">
             <div className="text-2xl font-black font-mono text-slate-900 dark:text-slate-100">
-              {flashUsed.toFixed(1)}{' '}
-              <span className="text-sm font-normal text-slate-400">/ {flashTotal.toFixed(1)}MB</span>
+              {Number(flashUsed || 0).toFixed(1)}{' '}
+              <span className="text-sm font-normal text-slate-400">/ {Number(flashTotal || 16).toFixed(1)}MB</span>
             </div>
             <span className="text-[11px] text-slate-400">
               Overlay ROM
@@ -263,8 +267,13 @@ export default function DashboardScreen() {
               </span>
             </div>
           </div>
-          <div className="text-[10px] text-slate-400 truncate">
-            {status?.nextdns?.node ? `Node: ${status.nextdns.node}` : 'Cổng mạng Internet sẵn sàng'}
+          <div
+            className="text-[10px] text-slate-400 truncate"
+            title={status?.nextdns?.active ? (status?.nextdns?.node || 'Đang lọc nội dung & bảo vệ') : 'Cổng mạng Internet sẵn sàng'}
+          >
+            {status?.nextdns?.active
+              ? (status?.nextdns?.node || 'Đang lọc nội dung & bảo vệ')
+              : 'Cổng mạng Internet sẵn sàng'}
           </div>
         </div>
       </div>
@@ -286,7 +295,7 @@ export default function DashboardScreen() {
             <div className="flex flex-col items-end">
               <span className="text-[10px] text-slate-400 font-semibold">TẢI VỀ (DL)</span>
               <span className="text-lg font-black font-mono text-blue-600 dark:text-blue-400">
-                {(status?.dl_mbps ?? 0).toFixed(2)}{' '}
+                {Number(status?.dl_mbps ?? 0).toFixed(2)}{' '}
                 <span className="text-xs font-normal text-slate-500">MB/s</span>
               </span>
             </div>
@@ -295,7 +304,7 @@ export default function DashboardScreen() {
             <div className="flex flex-col items-end">
               <span className="text-[10px] text-slate-400 font-semibold">TẢI LÊN (UL)</span>
               <span className="text-lg font-black font-mono text-emerald-600 dark:text-emerald-400">
-                {(status?.ul_mbps ?? 0).toFixed(2)}{' '}
+                {Number(status?.ul_mbps ?? 0).toFixed(2)}{' '}
                 <span className="text-xs font-normal text-slate-500">MB/s</span>
               </span>
             </div>
@@ -310,8 +319,8 @@ export default function DashboardScreen() {
           <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
             <span>🚀 Đỉnh cao nhất:</span>
             <span className="font-mono font-bold text-slate-700 dark:text-slate-200">
-              ↓{(status?.peak_bandwidth?.dl_mbps ?? 0).toFixed(2)} MB/s • ↑
-              {(status?.peak_bandwidth?.ul_mbps ?? 0).toFixed(2)} MB/s
+              ↓{Number(status?.peak_bandwidth?.dl_mbps ?? 0).toFixed(2)} MB/s • ↑
+              {Number(status?.peak_bandwidth?.ul_mbps ?? 0).toFixed(2)} MB/s
             </span>
           </div>
           <button

@@ -11,6 +11,8 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
 
+  const safeItems = Array.isArray(items) ? items : [];
+
   const drawChart = useCallback(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -36,18 +38,18 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
     const plotW = Math.max(10, width - padLeft - padRight);
     const plotH = Math.max(10, height - padTop - padBottom);
 
-    if (items.length === 0) return;
+    if (safeItems.length === 0) return;
 
     // Tìm max value
     const maxVal = Math.max(
       0.1,
-      ...items.map((it) => Math.max(it.dl, it.ul))
+      ...safeItems.map((it) => Math.max(Number(it?.dl || 0), Number(it?.ul || 0)))
     );
     const yCeil = Math.ceil(maxVal * 1.25 * 10) / 10 || 1;
 
     const getX = (idx: number) => {
-      if (items.length <= 1) return padLeft + plotW / 2;
-      return padLeft + (idx / (items.length - 1)) * plotW;
+      if (safeItems.length <= 1) return padLeft + plotW / 2;
+      return padLeft + (idx / (safeItems.length - 1)) * plotW;
     };
 
     const getY = (val: number) => {
@@ -127,8 +129,8 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
       ctx.stroke(linePath);
     };
 
-    const dlPoints = items.map((it, idx) => ({ x: getX(idx), y: getY(it.dl) }));
-    const ulPoints = items.map((it, idx) => ({ x: getX(idx), y: getY(it.ul) }));
+    const dlPoints = safeItems.map((it, idx) => ({ x: getX(idx), y: getY(Number(it?.dl || 0)) }));
+    const ulPoints = safeItems.map((it, idx) => ({ x: getX(idx), y: getY(Number(it?.ul || 0)) }));
 
     // Vẽ Download (Xanh Dương) & Upload (Xanh Lá)
     drawSeries(dlPoints, '#3b82f6', 'rgba(59, 130, 246, 0.25)', 'rgba(59, 130, 246, 0.0)');
@@ -136,13 +138,12 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
 
     // Vẽ nhãn X-axis
     ctx.font = '10px system-ui';
-    ctx.textAlign = 'middle' as any;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
 
-    const stepLabel = Math.max(1, Math.floor(items.length / 6));
-    items.forEach((it, idx) => {
-      if (idx % stepLabel === 0 || idx === items.length - 1) {
+    const stepLabel = Math.max(1, Math.floor(safeItems.length / 6));
+    safeItems.forEach((it, idx) => {
+      if (idx % stepLabel === 0 || idx === safeItems.length - 1) {
         const x = getX(idx);
         ctx.fillStyle = idx === hoverIndex ? '#3b82f6' : '#64748b';
         ctx.fillText(it.label, x, padTop + plotH + 6);
@@ -150,7 +151,7 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
     });
 
     // Vẽ Hover Crosshair
-    if (hoverIndex !== null && hoverIndex >= 0 && hoverIndex < items.length) {
+    if (hoverIndex !== null && hoverIndex >= 0 && hoverIndex < safeItems.length) {
       const hX = getX(hoverIndex);
       const hDlY = dlPoints[hoverIndex].y;
       const hUlY = ulPoints[hoverIndex].y;
@@ -183,7 +184,7 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
       ctx.strokeStyle = '#ffffff';
       ctx.stroke();
     }
-  }, [items, height, hoverIndex]);
+  }, [safeItems, height, hoverIndex]);
 
   useEffect(() => {
     drawChart();
@@ -194,7 +195,7 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
 
   const handlePointer = (clientX: number) => {
     const container = containerRef.current;
-    if (!container || items.length === 0) return;
+    if (!container || safeItems.length === 0) return;
     const rect = container.getBoundingClientRect();
     const padLeft = 42;
     const padRight = 16;
@@ -202,11 +203,11 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
 
     const relX = clientX - rect.left - padLeft;
     const ratio = Math.max(0, Math.min(1, relX / plotW));
-    const idx = Math.round(ratio * (items.length - 1));
+    const idx = Math.round(ratio * (safeItems.length - 1));
     setHoverIndex(idx);
   };
 
-  const activeItem = hoverIndex !== null && items[hoverIndex] ? items[hoverIndex] : null;
+  const activeItem = hoverIndex !== null && safeItems[hoverIndex] ? safeItems[hoverIndex] : null;
 
   return (
     <div className="relative w-full select-none" ref={containerRef}>
@@ -219,10 +220,10 @@ export function TrafficChart({ items, unit = 'MB/s', height = 160 }: TrafficChar
                 {activeItem.label}
               </span>
               <span className="text-blue-600 dark:text-blue-400 font-medium">
-                DL: <strong>{activeItem.dl.toFixed(2)}</strong> {unit}
+                DL: <strong>{Number(activeItem.dl || 0).toFixed(2)}</strong> {unit}
               </span>
               <span className="text-emerald-600 dark:text-emerald-400 font-medium">
-                UL: <strong>{activeItem.ul.toFixed(2)}</strong> {unit}
+                UL: <strong>{Number(activeItem.ul || 0).toFixed(2)}</strong> {unit}
               </span>
             </div>
           ) : (

@@ -1,5 +1,14 @@
 import { useState } from 'react';
 
+const DEFAULT_POWER_OPTIONS = [
+  { val: '24', label: '24 dBm (250 mW - Tối đa)' },
+  { val: '23', label: '23 dBm (200 mW - Rất mạnh)' },
+  { val: '20', label: '20 dBm (100 mW - Tiêu chuẩn)' },
+  { val: '17', label: '17 dBm (50 mW - Vừa phải)' },
+  { val: '14', label: '14 dBm (25 mW - Tiết kiệm)' },
+  { val: '10', label: '10 dBm (10 mW - Phòng ngủ)' },
+];
+
 interface WifiCardProps {
   bandTitle: string;
   bandBadge: string;
@@ -14,6 +23,7 @@ interface WifiCardProps {
   channels: { val: string; label: string }[];
   power: string;
   onPowerChange: (val: string) => void;
+  realChannel?: string;
 }
 
 export function WifiCard({
@@ -28,9 +38,20 @@ export function WifiCard({
   onChannelChange,
   channels,
   power,
-  onPowerChange
+  onPowerChange,
+  realChannel
 }: WifiCardProps) {
   const [showPassword, setShowPassword] = useState(false);
+
+  // Kiem tra gia tri power hien tai cua router co trong danh sach khong
+  const isCustomPower = Boolean(
+    power && !DEFAULT_POWER_OPTIONS.some((opt) => opt.val === String(power))
+  );
+
+  // Kiem tra channel hien tai co trong danh sach options khong
+  const isCustomChannel = Boolean(
+    channel && !channels.some((c) => c.val === String(channel))
+  );
 
   return (
     <div className="vcrt-card p-4 flex flex-col gap-4">
@@ -87,14 +108,26 @@ export function WifiCard({
 
         {/* Channel */}
         <div>
-          <label className="block text-xs font-semibold text-slate-600 dark:text-slate-400 mb-1">
-            Kênh phát sóng (Channel)
-          </label>
+          <div className="flex items-center justify-between mb-1">
+            <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+              Kênh phát sóng (Channel)
+            </label>
+            {channel === 'auto' && realChannel && (
+              <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+                (Đang phát: Kênh {realChannel})
+              </span>
+            )}
+          </div>
           <select
             className="vcrt-input"
             value={channel}
             onChange={(e) => onChannelChange(e.target.value)}
           >
+            {isCustomChannel && (
+              <option value={channel}>
+                Kênh {channel} (Hiện tại router)
+              </option>
+            )}
             {channels.map((ch) => (
               <option key={ch.val} value={ch.val}>
                 {ch.label}
@@ -113,13 +146,20 @@ export function WifiCard({
             value={power}
             onChange={(e) => onPowerChange(e.target.value)}
           >
-            <option value="20">100% (20 dBm - 100 mW - Mặc định)</option>
-            <option value="17">75% (17 dBm - 50 mW - Tiết kiệm điện)</option>
-            <option value="14">50% (14 dBm - 25 mW - Tầm gần)</option>
-            <option value="10">25% (10 dBm - 10 mW - Phòng ngủ)</option>
+            {isCustomPower && (
+              <option value={power}>
+                {power} dBm (Hiện tại router)
+              </option>
+            )}
+            {DEFAULT_POWER_OPTIONS.map((opt) => (
+              <option key={opt.val} value={opt.val}>
+                {opt.label}
+              </option>
+            ))}
           </select>
         </div>
       </div>
     </div>
   );
 }
+
