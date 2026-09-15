@@ -26,6 +26,14 @@ REPORTED_DATE_FILE="/tmp/vcrt_reported_date.tmp"
 
 mkdir -p "$VCRT_CONF_DIR" /tmp 2>/dev/null
 
+# ─── TỐI ƯU HÓA MẠNG: MTU 1420 & TCP MSS CLAMPING (TRÁNH RƠI GÓI TIN TLS/CURL) ──
+iptables -t mangle -C OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
+iptables -t mangle -A OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+for ifc in $(ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | grep -E 'sta|wan|eth'); do
+    c_mtu=$(cat /sys/class/net/$ifc/mtu 2>/dev/null || echo 1500)
+    [ "$c_mtu" -gt 1420 ] 2>/dev/null && ip link set dev "$ifc" mtu 1420 2>/dev/null || true
+done
+
 KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traffic"},{"text":"/wifi"}],[{"text":"/ping"},{"text":"/help"}]],"resize_keyboard":true,"is_persistent":true}'
 
 # ─── BẢO VỆ DỮ LIỆU NHẠY CẢM VỚI TELEGRAM SPOILER (<tg-spoiler>) ──────────────
@@ -105,22 +113,40 @@ send_msg() {
 
     # Nếu có chỉ định chat_id cụ thể (phản hồi lệnh), gửi về đúng chat/nhóm đó
     if [ -n "$target_chat" ]; then
-        curl -4 --tlsv1.2 -s --max-time 10 -X POST "$api_url" \
-            -d "chat_id=${target_chat}" \
-            -d "parse_mode=HTML" \
-            -d "reply_markup=${KEYBOARD}" \
-            --data-urlencode "text=${text}" >/dev/null 2>&1 || true
+        local clean_target=$(echo "$target_chat" | tr -d ' \r\n')
+        local res=$(curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 10 -X POST "$api_url" \
+            --data-urlencode "chat_id=${clean_target}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "reply_markup=${KEYBOARD}" \
+            --data-urlencode "text=${text}" 2>&1)
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Sent to ${clean_target}: $res" >> /tmp/vcrt_bot.log 2>/dev/null || true
+        if echo "$res" | grep -q "can't parse entities"; then
+            res=$(curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 10 -X POST "$api_url" \
+                --data-urlencode "chat_id=${clean_target}" \
+                --data-urlencode "reply_markup=${KEYBOARD}" \
+                --data-urlencode "text=${text}" 2>&1)
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Retry plain to ${clean_target}: $res" >> /tmp/vcrt_bot.log 2>/dev/null || true
+        fi
         return 0
     fi
 
     # Nếu gửi thông báo chung (chạy ngầm), phát tới TẤT CẢ Chat ID / Nhóm được cấp quyền
     for cid in $(echo "$CHAT_ID" | tr ',;' ' '); do
-        [ -z "$cid" ] && continue
-        curl -4 --tlsv1.2 -s --max-time 10 -X POST "$api_url" \
-            -d "chat_id=${cid}" \
-            -d "parse_mode=HTML" \
-            -d "reply_markup=${KEYBOARD}" \
-            --data-urlencode "text=${text}" >/dev/null 2>&1 || true
+        local clean_cid=$(echo "$cid" | tr -d ' \r\n')
+        [ -z "$clean_cid" ] && continue
+        local res=$(curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 10 -X POST "$api_url" \
+            --data-urlencode "chat_id=${clean_cid}" \
+            --data-urlencode "parse_mode=HTML" \
+            --data-urlencode "reply_markup=${KEYBOARD}" \
+            --data-urlencode "text=${text}" 2>&1)
+        echo "[$(date '+%Y-%m-%d %H:%M:%S')] Sent to ${clean_cid}: $res" >> /tmp/vcrt_bot.log 2>/dev/null || true
+        if echo "$res" | grep -q "can't parse entities"; then
+            res=$(curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 10 -X POST "$api_url" \
+                --data-urlencode "chat_id=${clean_cid}" \
+                --data-urlencode "reply_markup=${KEYBOARD}" \
+                --data-urlencode "text=${text}" 2>&1)
+            echo "[$(date '+%Y-%m-%d %H:%M:%S')] Retry plain to ${clean_cid}: $res" >> /tmp/vcrt_bot.log 2>/dev/null || true
+        fi
     done
 }
 
@@ -433,9 +459,12 @@ cmd_status() {
     local rom_used=$(df -h /overlay 2>/dev/null | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')
     [ -z "$rom_used" ] && rom_used=$(df -h / 2>/dev/null | awk 'NR==2 {print $3 "/" $2 " (" $5 ")"}')
 
-    local wan_ip=$(ip -4 addr show eth0.2 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n 1)
+    local wan_dev=$(ip route show default 2>/dev/null | awk '{print $5}' | head -n1)
+    local wan_ip=""
+    [ -n "$wan_dev" ] && wan_ip=$(ip -4 addr show "$wan_dev" 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n 1)
+    [ -z "$wan_ip" ] && wan_ip=$(ip -4 addr show eth0.2 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n 1)
     [ -z "$wan_ip" ] && wan_ip=$(ip -4 addr show eth0 2>/dev/null | awk '/inet /{print $2}' | cut -d/ -f1 | head -n 1)
-    [ -z "$wan_ip" ] && wan_ip=$(curl -s --max-time 2 https://api.ipify.org 2>/dev/null || echo "192.168.10.x")
+    [ -z "$wan_ip" ] && wan_ip=$(curl -s --tlsv1.2 --tls-max 1.2 --max-time 2 https://api.ipify.org 2>/dev/null || echo "192.168.10.x")
 
     # Đếm số thiết bị online THỰC TẾ (100% chính xác, không trùng lặp)
     local wifi_tmp="/tmp/vcrt_wifi_status.tmp"
@@ -971,7 +1000,7 @@ Bấm <b>/help</b> để xem bảng lệnh hoặc bấm trực tiếp các nút 
 register_telegram_commands() {
     [ -z "$BOT_TOKEN" ] && return
     local cmd_json='{"commands":[{"command":"status","description":"⚡ Xem CPU, RAM, Uptime, WAN IP"},{"command":"clients","description":"📱 Thiết bị online, băng tần & thời gian"},{"command":"traffic","description":"📊 Thống kê dung lượng mạng đã dùng"},{"command":"wifi","description":"📶 Thông số phát sóng Wi-Fi 2.4G & 5G"},{"command":"ping","description":"🏓 Kiểm tra độ trễ mạng Internet"},{"command":"update","description":"🚀 Kiểm tra & cập nhật VCRT OS"},{"command":"block","description":"⛔ Chặn mạng: /block <mac> [phút]"},{"command":"unblock","description":"🔓 Mở mạng: /unblock <mac>"},{"command":"reboot","description":"🔄 Khởi động lại router từ xa"},{"command":"help","description":"❓ Hướng dẫn điều khiển"}]}'
-    curl -4 --tlsv1.2 -s --max-time 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands" \
+    curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands" \
         -H "Content-Type: application/json" \
         -d "$cmd_json" >/dev/null 2>&1 || true
 }
@@ -1048,26 +1077,29 @@ while true; do
     fi
     API_URL="https://api.telegram.org/bot${BOT_TOKEN}"
 
-    UPDATES=$(curl -4 --tlsv1.2 -s --max-time 30 "${API_URL}/getUpdates?offset=${OFFSET}&limit=1&timeout=20" 2>/dev/null || true)
+    UPDATES=$(curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 30 "${API_URL}/getUpdates?offset=${OFFSET}&limit=1&timeout=20" 2>/dev/null || true)
 
     if [ -n "$UPDATES" ]; then
-        UPDATE_ID=$(echo "$UPDATES" | grep -o '"update_id":[0-9]*' | head -n 1 | cut -d: -f2)
-        SENDER_ID=$(echo "$UPDATES" | grep -o '"chat":{[^}]*"id":-*[0-9]*' | head -n 1 | grep -o -- '-*[0-9]*$')
+        UPDATE_ID=$(echo "$UPDATES" | grep -o '"update_id":[0-9]*' | head -n 1 | cut -d: -f2 | tr -d ' \r\n')
+        SENDER_ID=$(echo "$UPDATES" | grep -o '"chat":{[^}]*"id":-*[0-9]*' | head -n 1 | grep -o -- '-*[0-9]*$' | tr -d ' \r\n')
         CMD_TEXT=$(echo "$UPDATES" | grep -o '"text":"[^"]*"' | head -n 1 | cut -d'"' -f4)
 
         if [ -n "$UPDATE_ID" ]; then
             OFFSET=$((UPDATE_ID + 1))
 
             # Phân quyền: Kiểm tra SENDER_ID có trong danh sách CHAT_ID không (hỗ trợ cả nhóm âm)
+            clean_sender=$(echo "$SENDER_ID" | tr -d ' \r\n')
             is_authorized=0
             for allowed_id in $(echo "$CHAT_ID" | tr ',;' ' '); do
-                if [ "$SENDER_ID" = "$allowed_id" ]; then
+                clean_allowed=$(echo "$allowed_id" | tr -d ' \r\n')
+                if [ "$clean_sender" = "$clean_allowed" ] && [ -n "$clean_allowed" ]; then
                     is_authorized=1
                     break
                 fi
             done
 
             if [ "$is_authorized" -eq 1 ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] Received cmd '${CMD_TEXT}' from ${clean_sender}" >> /tmp/vcrt_bot.log 2>/dev/null || true
                 # 1. Bỏ khoảng trắng thừa và tách các từ
                 clean_line=$(echo "$CMD_TEXT" | awk '{$1=$1};1')
                 first_word=$(echo "$clean_line" | awk '{print $1}')
@@ -1129,6 +1161,8 @@ while true; do
                         cmd_unknown "$first_word" "$SENDER_ID"
                         ;;
                 esac
+            elif [ -n "$clean_sender" ]; then
+                echo "[$(date '+%Y-%m-%d %H:%M:%S')] Unauthorized message from ${clean_sender} (Allowed: ${CHAT_ID})" >> /tmp/vcrt_bot.log 2>/dev/null || true
             fi
         fi
     fi

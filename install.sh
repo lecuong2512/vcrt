@@ -80,6 +80,20 @@ if [ -f vcrt_bot ]; then
     echo ">> Da khoi dong lai dich vu vcrt_bot qua procd"
 fi
 
+# 6.1. Toi uu MTU & TCP MSS Clamping viễn thông / WISP
+mkdir -p /etc/hotplug.d/iface 2>/dev/null
+cat << 'EOF' > /etc/hotplug.d/iface/99-mtu-fix
+#!/bin/sh
+iptables -t mangle -C OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \
+iptables -t mangle -A OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || true
+for ifc in $(ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | grep -E 'sta|wan|eth'); do
+    c_mtu=$(cat /sys/class/net/$ifc/mtu 2>/dev/null || echo 1500)
+    [ "$c_mtu" -gt 1420 ] 2>/dev/null && ip link set dev "$ifc" mtu 1420 2>/dev/null || true
+done
+EOF
+chmod +x /etc/hotplug.d/iface/99-mtu-fix 2>/dev/null || true
+sh /etc/hotplug.d/iface/99-mtu-fix 2>/dev/null || true
+
 # 7. Chep Web UI
 if [ -d www/vcrt ]; then
     rm -rf /www/vcrt/* 2>/dev/null || true
@@ -88,7 +102,7 @@ if [ -d www/vcrt ]; then
 fi
 
 # 8. Don dep tep tam
-rm -rf /tmp/vcrt /tmp/vcrt_bot* /tmp/www /tmp/telegram.conf.example /tmp/deploy_vcrt.tar.gz /tmp/install.sh /tmp/version 2>/dev/null || true
+rm -rf /tmp/vcrt /tmp/vcrt_bot /tmp/vcrt_bot.sh /tmp/www /tmp/telegram.conf.example /tmp/deploy_vcrt.tar.gz /tmp/install.sh /tmp/version 2>/dev/null || true
 
 echo "=================================================="
 echo "🎉 VCRT OS v1.0.0 DEPLOY SUCCESSFUL!"
@@ -102,11 +116,12 @@ if [ -f "$CONF_FILE" ]; then
     BOT_TOKEN=$(echo "$BOT_TOKEN" | sed 's/%3A/:/g; s/%3a/:/g')
     if [ "$BOT_ENABLED" = "1" ] && [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ]; then
         for cid in $(echo "$CHAT_ID" | tr ',;' ' '); do
-            [ -z "$cid" ] && continue
-            curl -4 --tlsv1.2 -s --max-time 8 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
-                -d "chat_id=${cid}" \
-                -d "parse_mode=HTML" \
-                -d "reply_markup=${KEYBOARD}" \
+            clean_cid=$(echo "$cid" | tr -d ' \r\n')
+            [ -z "$clean_cid" ] && continue
+            curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 8 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+                --data-urlencode "chat_id=${clean_cid}" \
+                --data-urlencode "parse_mode=HTML" \
+                --data-urlencode "reply_markup=${KEYBOARD}" \
                 --data-urlencode "text=🚀 <b>VCRT OS v1.0.0 - CẬP NHẬT THÀNH CÔNG!</b>
 ━━━━━━━━━━━━━━━━━━
 ⬡ <b>VCRT OS CYBER ROUTER ĐÃ SẴN SÀNG!</b>
