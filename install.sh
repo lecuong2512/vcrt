@@ -99,10 +99,11 @@ KEYBOARD='{"keyboard":[[{"text":"/status"},{"text":"/clients"}],[{"text":"/traff
 
 if [ -f "$CONF_FILE" ]; then
     . "$CONF_FILE" 2>/dev/null || true
+    BOT_TOKEN=$(echo "$BOT_TOKEN" | sed 's/%3A/:/g; s/%3a/:/g')
     if [ "$BOT_ENABLED" = "1" ] && [ -n "$BOT_TOKEN" ] && [ -n "$CHAT_ID" ]; then
         for cid in $(echo "$CHAT_ID" | tr ',;' ' '); do
             [ -z "$cid" ] && continue
-            curl -s --max-time 8 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
+            curl -4 --tlsv1.2 -s --max-time 8 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/sendMessage" \
                 -d "chat_id=${cid}" \
                 -d "parse_mode=HTML" \
                 -d "reply_markup=${KEYBOARD}" \

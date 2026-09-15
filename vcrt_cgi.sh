@@ -995,6 +995,25 @@ EOF
     exit 0
 fi
 
+send_telegram_event() {
+    local text="$1"
+    local conf_f="${VCRT_CONF_DIR:-/etc/vcrt}/telegram.conf"
+    [ ! -f "$conf_f" ] && return
+    local b_en=$(awk -F= '/^(BOT_ENABLED|bot_enabled)/{gsub(/[ "\r\n]/,"",$2); print $2}' "$conf_f" 2>/dev/null)
+    [ "$b_en" != "1" ] && return
+    local tok=$(awk -F= '/^(BOT_TOKEN|bot_token)/{gsub(/[ "\r\n]/,"",$2); print $2}' "$conf_f" 2>/dev/null | sed 's/%3A/:/g; s/%3a/:/g')
+    local cid=$(awk -F= '/^(CHAT_ID|chat_id)/{gsub(/[ "\r\n]/,"",$2); print $2}' "$conf_f" 2>/dev/null | sed 's/%20/ /g; s/%2C/,/g; s/%2c/,/g; s/+/ /g')
+    [ -z "$tok" ] || [ -z "$cid" ] && return
+
+    for one_cid in $(echo "$cid" | tr ',;' ' '); do
+        [ -z "$one_cid" ] && continue
+        curl -4 --tlsv1.2 -s --max-time 5 -X POST "https://api.telegram.org/bot${tok}/sendMessage" \
+            -d "chat_id=${one_cid}" \
+            -d "parse_mode=HTML" \
+            --data-urlencode "text=${text}" >/dev/null 2>&1 &
+    done
+}
+
 # ==============================================================================
 # 3. SOFT BLOCK (Cắt Internet với Hẹn Giờ)
 # ==============================================================================
@@ -1820,9 +1839,14 @@ if [ "$ACTION" = "telegram_set" ]; then
 
     t_tok="${PARAM_BOT_TOKEN:-$cur_tok}"
     t_cid="${PARAM_CHAT_ID:-$cur_cid}"
+    # Tự động decode %3A thành : cho PARAM_BOT_TOKEN
+    t_tok=$(echo "$t_tok" | sed 's/%3A/:/g; s/%3a/:/g')
     # Giải mã URL decode cho chat_id nếu có
     t_cid=$(echo "$t_cid" | sed 's/%20/ /g; s/%2C/,/g; s/%2c/,/g; s/+/ /g')
     t_en="${PARAM_BOT_ENABLED:-1}"
+    if [ -n "$t_tok" ] && [ -n "$t_cid" ]; then
+        t_en="1"
+    fi
     t_au="${PARAM_AUTO_UPDATE:-0}"
     t_nw="${PARAM_NOTIF_WIFI:-1}"
     t_ne="${PARAM_NOTIF_EXPIRE:-1}"
@@ -1873,6 +1897,8 @@ if [ "$ACTION" = "telegram_test" ]; then
     if [ -z "$cid" ] && [ -f "$conf_f" ]; then
         cid=$(awk -F= '/^(CHAT_ID|chat_id)/{gsub(/[ "\r\n]/,"",$2); print $2}' "$conf_f" 2>/dev/null)
     fi
+    tok=$(echo "$tok" | sed 's/%3A/:/g; s/%3a/:/g')
+    cid=$(echo "$cid" | sed 's/%20/ /g; s/%2C/,/g; s/%2c/,/g; s/+/ /g')
 
     if [ -z "$tok" ] || [ -z "$cid" ]; then
         printf '{"status":"error","message":"missing_token_or_chat_id"}\n'
@@ -1892,7 +1918,7 @@ if [ "$ACTION" = "telegram_test" ]; then
     err_last=""
     for one_cid in $(echo "$cid" | tr ',;' ' '); do
         [ -z "$one_cid" ] && continue
-        res=$(curl -s --max-time 8 -X POST "https://api.telegram.org/bot${tok}/sendMessage" \
+        res=$(curl -4 --tlsv1.2 -s --max-time 8 -X POST "https://api.telegram.org/bot${tok}/sendMessage" \
             -d "chat_id=${one_cid}" \
             -d "parse_mode=HTML" \
             --data-urlencode "text=${test_body}" 2>&1)

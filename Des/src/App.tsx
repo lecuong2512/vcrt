@@ -2253,7 +2253,7 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
       setTgNotifExpire(data.notif_expire ?? true);
       setTgNotifDaily(data.notif_daily ?? true);
       setTgDailyHour(data.daily_hour || 20);
-      setTgEnabled(data.enabled ?? false);
+      setTgEnabled(data.enabled ?? (data.has_token && !!data.chat_id));
       setTgAutoUpdate(data.auto_update ?? false);
       if (!data.has_token || !data.chat_id) {
         setIsEditingTg(true);
@@ -2284,6 +2284,9 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
     setTgLoading(true);
     setTgMsg(null);
     try {
+      const hasToken = !!(tgToken?.trim() || tgConfig?.has_token);
+      const hasChatId = !!tgChatId?.trim();
+      const sendEnabled = (hasToken && hasChatId) ? true : tgEnabled;
       const res = await saveTelegramConfigApi({
         bot_token: tgToken || undefined,
         chat_id: tgChatId,
@@ -2292,9 +2295,10 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
         notif_expire: tgNotifExpire,
         notif_daily: tgNotifDaily,
         daily_hour: tgDailyHour,
-        bot_enabled: tgEnabled
+        bot_enabled: sendEnabled
       });
       if (res && res.status === "ok") {
+        setTgEnabled(sendEnabled);
         setTgMsg({ text: "✅ Đã lưu cấu hình và đồng bộ dịch vụ Telegram Bot thành công!" });
         setTgToken("");
         setShowTokenInput(false);
@@ -2677,6 +2681,31 @@ function SettingsScreen({ onLogout, currentUser }: { onLogout?: () => void; curr
         ) : (
           /* FORM NHẬP / CHỈNH SỬA TOKEN VÀ NHIỀU CHAT ID */
           <div className="flex flex-col gap-3">
+            {/* Công tắc Bật/Tắt Bot 24/7 */}
+            <div style={{
+              background: tgEnabled ? "rgba(16, 185, 129, 0.08)" : "rgba(239, 68, 68, 0.08)",
+              borderRadius: 10,
+              padding: "10px 12px",
+              border: `1px solid ${tgEnabled ? "rgba(16, 185, 129, 0.25)" : "rgba(239, 68, 68, 0.25)"}`
+            }}>
+              <label className="flex items-center justify-between cursor-pointer select-none">
+                <div className="flex flex-col">
+                  <span style={{ fontSize: 12, color: tgEnabled ? "#10B981" : "#EF4444", fontWeight: 700 }}>
+                    {tgEnabled ? "⚡ Dịch vụ Telegram Bot: ĐANG BẬT" : "⏹️ Dịch vụ Telegram Bot: ĐANG TẮT"}
+                  </span>
+                  <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    {tgEnabled ? "Bot lắng nghe lệnh và gửi thông báo tự động 24/7" : "Tắt toàn bộ tiến trình bot và thông báo"}
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={tgEnabled}
+                  onChange={(e) => setTgEnabled(e.target.checked)}
+                  style={{ accentColor: "#10B981", width: 18, height: 18, cursor: "pointer" }}
+                />
+              </label>
+            </div>
+
             <div>
               <div className="flex justify-between items-center mb-1">
                 <span style={{ fontSize: 11, color: "var(--text-muted)" }}>Bot Token (lấy từ @BotFather)</span>

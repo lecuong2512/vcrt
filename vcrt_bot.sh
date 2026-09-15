@@ -94,6 +94,7 @@ EOF
             esac
         done < "$CONF_FILE"
     fi
+    BOT_TOKEN=$(echo "$BOT_TOKEN" | sed 's/%3A/:/g; s/%3a/:/g')
 }
 
 send_msg() {
@@ -104,7 +105,7 @@ send_msg() {
 
     # Nếu có chỉ định chat_id cụ thể (phản hồi lệnh), gửi về đúng chat/nhóm đó
     if [ -n "$target_chat" ]; then
-        curl -s --max-time 10 -X POST "$api_url" \
+        curl -4 --tlsv1.2 -s --max-time 10 -X POST "$api_url" \
             -d "chat_id=${target_chat}" \
             -d "parse_mode=HTML" \
             -d "reply_markup=${KEYBOARD}" \
@@ -115,7 +116,7 @@ send_msg() {
     # Nếu gửi thông báo chung (chạy ngầm), phát tới TẤT CẢ Chat ID / Nhóm được cấp quyền
     for cid in $(echo "$CHAT_ID" | tr ',;' ' '); do
         [ -z "$cid" ] && continue
-        curl -s --max-time 10 -X POST "$api_url" \
+        curl -4 --tlsv1.2 -s --max-time 10 -X POST "$api_url" \
             -d "chat_id=${cid}" \
             -d "parse_mode=HTML" \
             -d "reply_markup=${KEYBOARD}" \
@@ -659,7 +660,7 @@ EOF
     send_msg "📱 <b>DANH SÁCH THIẾT BỊ ĐANG ONLINE (${count} máy)</b>
 ━━━━━━━━━━━━━━━━━━
 💡 <i>Chạm vào phần làm mờ của máy nào thì chỉ riêng máy đó hiện IP & MAC:</i>" "$target_chat"
-    sleep 0.2
+    sleep 1
 
     # Gửi TỪNG KHỐI TIN NHẮN THIẾT BỊ (Mỗi thiết bị là 1 tin nhắn card độc lập nguyên vẹn)
     local i=1
@@ -668,7 +669,7 @@ EOF
         if [ -f "$cf" ]; then
             local card_body=$(cat "$cf")
             send_msg "$card_body" "$target_chat"
-            sleep 0.2
+            sleep 1
         fi
         i=$((i + 1))
     done
@@ -970,21 +971,10 @@ Bấm <b>/help</b> để xem bảng lệnh hoặc bấm trực tiếp các nút 
 register_telegram_commands() {
     [ -z "$BOT_TOKEN" ] && return
     local cmd_json='{"commands":[{"command":"status","description":"⚡ Xem CPU, RAM, Uptime, WAN IP"},{"command":"clients","description":"📱 Thiết bị online, băng tần & thời gian"},{"command":"traffic","description":"📊 Thống kê dung lượng mạng đã dùng"},{"command":"wifi","description":"📶 Thông số phát sóng Wi-Fi 2.4G & 5G"},{"command":"ping","description":"🏓 Kiểm tra độ trễ mạng Internet"},{"command":"update","description":"🚀 Kiểm tra & cập nhật VCRT OS"},{"command":"block","description":"⛔ Chặn mạng: /block <mac> [phút]"},{"command":"unblock","description":"🔓 Mở mạng: /unblock <mac>"},{"command":"reboot","description":"🔄 Khởi động lại router từ xa"},{"command":"help","description":"❓ Hướng dẫn điều khiển"}]}'
-    curl -s --max-time 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands" \
+    curl -4 --tlsv1.2 -s --max-time 10 -X POST "https://api.telegram.org/bot${BOT_TOKEN}/setMyCommands" \
         -H "Content-Type: application/json" \
         -d "$cmd_json" >/dev/null 2>&1 || true
 }
-
-# ─── KHỞI CHẠY TIẾN TRÌNH ────────────────────────────────────────────────────
-load_config
-
-if [ "$BOT_ENABLED" != "1" ] || [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
-    echo "Telegram Bot chua duoc cau hinh hoac bi tat trong $CONF_FILE"
-    record_traffic_periodically &
-    watch_block_timers &
-    wait
-    exit 0
-fi
 
 watch_system_updates() {
     # Kiểm tra bản cập nhật mới định kỳ (mỗi 6 tiếng một lần)
@@ -1014,6 +1004,17 @@ Gõ hoặc bấm <code>/update now</code> để cập nhật ngay lập tức!"
     done
 }
 
+# ─── KHỞI CHẠY TIẾN TRÌNH ────────────────────────────────────────────────────
+load_config
+
+if [ "$BOT_ENABLED" != "1" ] || [ -z "$BOT_TOKEN" ] || [ -z "$CHAT_ID" ]; then
+    echo "Telegram Bot chua duoc cau hinh hoac bi tat trong $CONF_FILE"
+    record_traffic_periodically &
+    watch_block_timers &
+    wait
+    exit 0
+fi
+
 watch_wifi_devices &
 PID_WIFI=$!
 watch_block_timers &
@@ -1038,7 +1039,6 @@ send_msg "🟢 <b>VCRT OS v1.0.0 - TELEGRAM BOT ĐÃ SẴN SÀNG!</b>
 register_telegram_commands
 
 OFFSET=0
-API_URL="https://api.telegram.org/bot${BOT_TOKEN}"
 
 while true; do
     load_config
@@ -1046,8 +1046,9 @@ while true; do
         echo "Bot bi tat tu web. Dung tien trinh."
         cleanup
     fi
+    API_URL="https://api.telegram.org/bot${BOT_TOKEN}"
 
-    UPDATES=$(curl -s --max-time 30 "${API_URL}/getUpdates?offset=${OFFSET}&limit=1&timeout=20" 2>/dev/null || true)
+    UPDATES=$(curl -4 --tlsv1.2 -s --max-time 30 "${API_URL}/getUpdates?offset=${OFFSET}&limit=1&timeout=20" 2>/dev/null || true)
 
     if [ -n "$UPDATES" ]; then
         UPDATE_ID=$(echo "$UPDATES" | grep -o '"update_id":[0-9]*' | head -n 1 | cut -d: -f2)
