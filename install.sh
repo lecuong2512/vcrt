@@ -295,7 +295,36 @@ if [ -f /etc/init.d/zerotier ]; then
     /etc/init.d/zerotier restart 2>/dev/null || true
 fi
 
-# 11. MTU Fix Hotplug Script (TCP MSS Clamping chong nghen WISP / 4G)
+# 11. Thiet lap bo loc tuong lua nftables (fw4) cho OpenWrt 23.05+ / 24.10 / 25.12
+if command -v fw4 >/dev/null 2>&1; then
+    echo "   -> Thiet lap tap luat nftables fw4 (scanwifi block sets)..."
+    mkdir -p /usr/share/nftables.d/table-pre \
+             /usr/share/nftables.d/chain-pre/forward \
+             /usr/share/nftables.d/chain-pre/input 2>/dev/null || true
+
+    cat << 'EOF' > /usr/share/nftables.d/table-pre/01-scanwifi.nft
+set scanwifi_block_wan {
+	type ether_addr
+	flags interval
+}
+set scanwifi_block_full {
+	type ether_addr
+	flags interval
+}
+EOF
+
+    cat << 'EOF' > /usr/share/nftables.d/chain-pre/forward/01-scanwifi.nft
+ether saddr @scanwifi_block_full counter drop
+ether saddr @scanwifi_block_wan oifname != "br-lan" counter drop
+EOF
+
+    cat << 'EOF' > /usr/share/nftables.d/chain-pre/input/01-scanwifi.nft
+ether saddr @scanwifi_block_full counter drop
+EOF
+    fw4 check >/dev/null 2>&1 && fw4 reload >/dev/null 2>&1 || true
+fi
+
+# 12. MTU Fix Hotplug Script (TCP MSS Clamping chong nghen WISP / 4G)
 cat << 'EOF' > /etc/hotplug.d/iface/99-mtu-fix
 #!/bin/sh
 iptables -t mangle -C OUTPUT -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu 2>/dev/null || \

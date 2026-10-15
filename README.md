@@ -43,9 +43,12 @@
   - Biểu đồ lưu lượng Canvas HTML5 siêu nhẹ, không phụ thuộc thư viện nặng Chart.js.
   - Logo vector SVG Zero-loss hiển thị sắc nét trên mọi độ phân giải màn hình.
   - Hỗ trợ PWA (Progressive Web App) giúp cài đặt như một ứng dụng độc lập trên iOS, Android và máy tính.
-- 🔒 **Quản Trị Thiết Bị & Kiểm Soát Truy Cập**:
-  - Đặt tên gợi nhớ cho thiết bị mạng (lưu cục bộ trên router).
-  - Chặn mạng linh hoạt: Chặn mềm (Soft Block - chặn DNS) và Chặn cứng (Hard Block - chặn IP/MAC iptables).
+- 🔒 **Quản Trị Thiết Bị & Kiểm Soát Truy Cập v2.1**:
+  - Đặt tên gợi nhớ cho thiết bị mạng (lưu bền vững cục bộ trên router).
+  - **Chặn mềm (Soft Block - Cắt Internet giữ LAN)**: Sử dụng native `nftables (fw4)` set `scanwifi_block_wan` (hoặc `iptables` fallback), ngăn chặn truy cập Internet ra ngoài WAN nhưng vẫn cho phép truy cập tài nguyên nội bộ LAN (trang quản trị, máy in, ổ mạng).
+  - **Chặn cứng (Hard Block - Đá văng & Cấm Wi-Fi)**: Ngắt tức thì kết nối Wi-Fi qua `hostapd del_client` kèm cờ deauth, nạp danh sách cấm runtime (`ubus reload`) mà **không cần restart Wi-Fi** (zero downtime), chặn toàn bộ luồng mạng qua `scanwifi_block_full`.
+  - **Lưu trữ CSDL bền vững (Persistence)**: Cơ sở dữ liệu hẹn giờ và danh sách chặn được lưu tại `/etc/vcrt/` (`blocks_timed.db`, `blocked_soft.db`, `blocked_hard.db`), chống mất dữ liệu khi khởi động lại router.
+  - **Hiển thị đầy đủ thiết bị bị chặn**: Danh sách thiết bị bị cắt mạng hoặc đá sóng luôn hiển thị đầy đủ trong các tab quản lý chuyên biệt kèm huy hiệu đếm ngược thời gian và nút mở mạng tức thì.
   - Hẹn giờ chặn linh hoạt (15 phút, 30 phút, 1 giờ, 2 giờ, 8 giờ, đến sáng).
 
 ---

@@ -75,9 +75,9 @@ watch_wifi_devices() {
 
 # ─── WATCHER 2: THEO DÕI HẾT HẠN CHẶN MẠNG (ĐẾM NGƯỢC TỰ ĐỘNG) ──────────────
 watch_block_timers() {
-    local timed_file="${BLOCKS_TIMED_FILE:-/tmp/vcrt_blocks_timed.db}"
-    local soft_file="${BLOCKED_SOFT_FILE:-/tmp/vcrt_blocked_soft.db}"
-    local hard_file="${BLOCKED_HARD_FILE:-/tmp/vcrt_blocked_hard.db}"
+    local timed_file="${BLOCKS_TIMED_FILE:-/etc/vcrt/blocks_timed.db}"
+    local soft_file="${BLOCKED_SOFT_FILE:-/etc/vcrt/blocked_soft.db}"
+    local hard_file="${BLOCKED_HARD_FILE:-/etc/vcrt/blocked_hard.db}"
 
     while true; do
         sleep 2
@@ -94,8 +94,17 @@ watch_block_timers() {
         while IFS='|' read -r b_mac b_type b_start b_expire b_dur b_name b_ip; do
             [ -z "$b_mac" ] && continue
             if [ "$b_expire" -gt 0 ] && [ "$now_epoch" -ge "$b_expire" ] 2>/dev/null; then
+                local b_mac_low=$(echo "$b_mac" | tr '[:upper:]' '[:lower:]')
+                nft delete element inet fw4 scanwifi_block_wan "{ $b_mac_low }" 2>/dev/null || true
+                nft delete element inet fw4 scanwifi_block_full "{ $b_mac_low }" 2>/dev/null || true
                 iptables -D FORWARD -m mac --mac-source "$b_mac" -j DROP 2>/dev/null || true
                 iptables -D INPUT -m mac --mac-source "$b_mac" -j DROP 2>/dev/null || true
+
+                [ -f /var/run/hostapd-phy0-ap0.maclist ] && sed -i "/$b_mac_low/d" /var/run/hostapd-phy0-ap0.maclist 2>/dev/null && ubus call hostapd.phy0-ap0 reload 2>/dev/null || true
+                [ -f /var/run/hostapd-phy1-ap0.maclist ] && sed -i "/$b_mac_low/d" /var/run/hostapd-phy1-ap0.maclist 2>/dev/null && ubus call hostapd.phy1-ap0 reload 2>/dev/null || true
+                uci -q del_list wireless.default_radio0.maclist="$b_mac_low" 2>/dev/null || true
+                uci -q del_list wireless.default_radio1.maclist="$b_mac_low" 2>/dev/null || true
+                uci commit wireless 2>/dev/null || true
 
                 if [ -f "$soft_file" ]; then
                     grep -v -i "$b_mac" "$soft_file" > "${soft_file}.tmp" 2>/dev/null || true

@@ -5,3 +5,4 @@ vcrt_bot_init text eol=lf
 install.sh text eol=lf
 telegram.conf.example text eol=lf
 *.conf text eol=lf
+version text eol=lf

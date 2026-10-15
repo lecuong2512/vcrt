@@ -1,8 +1,8 @@
 #!/bin/sh
 # VCRT OS v2.0 - Shared Constants (CGI + Telegram Daemon)
-export BLOCKS_TIMED_FILE="/tmp/vcrt_blocks_timed.db"
-export BLOCKED_SOFT_FILE="/tmp/vcrt_blocked_soft.db"
-export BLOCKED_HARD_FILE="/tmp/vcrt_blocked_hard.db"
+export BLOCKS_TIMED_FILE="/etc/vcrt/blocks_timed.db"
+export BLOCKED_SOFT_FILE="/etc/vcrt/blocked_soft.db"
+export BLOCKED_HARD_FILE="/etc/vcrt/blocked_hard.db"
 export SESSIONS_DIR="/tmp/vcrt_sessions"
 export CONFIG_DIR="/etc/vcrt"
 export AUTH_FILE="/etc/vcrt/passwd"

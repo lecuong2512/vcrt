@@ -195,11 +195,14 @@ cmd_clients() {
 
             # Kiểm tra tình trạng chặn mạng
             local block_badge=""
-            local timed_file="${BLOCKS_TIMED_FILE:-/tmp/vcrt_blocks_timed.db}"
-            local soft_file="${BLOCKED_SOFT_FILE:-/tmp/vcrt_blocked_soft.db}"
+            local timed_file="${BLOCKS_TIMED_FILE:-/etc/vcrt/blocks_timed.db}"
+            local soft_file="${BLOCKED_SOFT_FILE:-/etc/vcrt/blocked_soft.db}"
             if [ -f "$timed_file" ] && grep -qi "^${mac_low}|" "$timed_file" 2>/dev/null; then
                 block_badge=" [⛔ ĐANG BỊ CHẶN]"
             elif [ -f "$soft_file" ] && grep -qi "^${mac_low}" "$soft_file" 2>/dev/null; then
+                block_badge=" [⛔ ĐANG BỊ CHẶN]"
+            elif nft list set inet fw4 scanwifi_block_wan 2>/dev/null | grep -qi "$mac_low" || \
+                 nft list set inet fw4 scanwifi_block_full 2>/dev/null | grep -qi "$mac_low"; then
                 block_badge=" [⛔ ĐANG BỊ CHẶN]"
             fi
 
@@ -607,12 +610,15 @@ Ví dụ: <code>/block 00:11:22:33:44:55 60</code>" "$target_chat"
     now_epoch=$(date +%s 2>/dev/null || echo 0)
     local expire=$(( now_epoch + dur * 60 ))
 
-    local timed_file="${BLOCKS_TIMED_FILE:-/tmp/vcrt_blocks_timed.db}"
-    local soft_file="${BLOCKED_SOFT_FILE:-/tmp/vcrt_blocked_soft.db}"
+    local timed_file="${BLOCKS_TIMED_FILE:-/etc/vcrt/blocks_timed.db}"
+    local soft_file="${BLOCKED_SOFT_FILE:-/etc/vcrt/blocked_soft.db}"
 
+    # 1. NFTABLES (fw4) & iptables fallback
+    nft add element inet fw4 scanwifi_block_wan "{ $target_mac_low }" 2>/dev/null || true
     iptables -D FORWARD -m mac --mac-source "$target_mac_low" -j DROP 2>/dev/null || true
-    iptables -I FORWARD -m mac --mac-source "$target_mac_low" -j DROP
+    iptables -I FORWARD -m mac --mac-source "$target_mac_low" -j DROP 2>/dev/null || true
 
+    mkdir -p /etc/vcrt 2>/dev/null
     printf '%s\n' "$target_mac_low" >> "$soft_file"
     [ -f "$timed_file" ] && grep -v -i "^${target_mac_low}|" "$timed_file" > "${timed_file}.tmp" 2>/dev/null || true
     mv "${timed_file}.tmp" "$timed_file" 2>/dev/null || true
@@ -642,12 +648,30 @@ Ví dụ: <code>/unblock 00:11:22:33:44:55</code>" "$target_chat"
 
     local target_mac_low
     target_mac_low=$(printf '%s' "$target_mac" | tr 'A-Z' 'a-z')
-    local timed_file="${BLOCKS_TIMED_FILE:-/tmp/vcrt_blocks_timed.db}"
-    local soft_file="${BLOCKED_SOFT_FILE:-/tmp/vcrt_blocked_soft.db}"
-    local hard_file="${BLOCKED_HARD_FILE:-/tmp/vcrt_blocked_hard.db}"
+    local timed_file="${BLOCKS_TIMED_FILE:-/etc/vcrt/blocks_timed.db}"
+    local soft_file="${BLOCKED_SOFT_FILE:-/etc/vcrt/blocked_soft.db}"
+    local hard_file="${BLOCKED_HARD_FILE:-/etc/vcrt/blocked_hard.db}"
 
+    # 1. NFTABLES (fw4)
+    nft delete element inet fw4 scanwifi_block_wan "{ $target_mac_low }" 2>/dev/null || true
+    nft delete element inet fw4 scanwifi_block_full "{ $target_mac_low }" 2>/dev/null || true
+
+    # 2. Legacy iptables
     iptables -D FORWARD -m mac --mac-source "$target_mac_low" -j DROP 2>/dev/null || true
     iptables -D INPUT -m mac --mac-source "$target_mac_low" -j DROP 2>/dev/null || true
+
+    # 3. Gỡ bỏ khỏi hostapd maclist và UCI maclist
+    if [ -f /var/run/hostapd-phy0-ap0.maclist ]; then
+        sed -i "/$target_mac_low/d" /var/run/hostapd-phy0-ap0.maclist 2>/dev/null || true
+        ubus call hostapd.phy0-ap0 reload 2>/dev/null || true
+    fi
+    if [ -f /var/run/hostapd-phy1-ap0.maclist ]; then
+        sed -i "/$target_mac_low/d" /var/run/hostapd-phy1-ap0.maclist 2>/dev/null || true
+        ubus call hostapd.phy1-ap0 reload 2>/dev/null || true
+    fi
+    uci -q del_list wireless.default_radio0.maclist="$target_mac_low" 2>/dev/null || true
+    uci -q del_list wireless.default_radio1.maclist="$target_mac_low" 2>/dev/null || true
+    uci commit wireless 2>/dev/null || true
 
     if [ -f "$soft_file" ]; then
         grep -v -i "$target_mac_low" "$soft_file" > "${soft_file}.tmp" 2>/dev/null || true

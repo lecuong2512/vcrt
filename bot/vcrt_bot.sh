@@ -29,9 +29,9 @@ elif [ -f "$BASE_DIR/lib/constants.sh" ]; then
 fi
 
 # Fallback constants nếu chưa được set
-: "${BLOCKS_TIMED_FILE:=/tmp/vcrt_blocks_timed.db}"
-: "${BLOCKED_SOFT_FILE:=/tmp/vcrt_blocked_soft.db}"
-: "${BLOCKED_HARD_FILE:=/tmp/vcrt_blocked_hard.db}"
+: "${BLOCKS_TIMED_FILE:=/etc/vcrt/blocks_timed.db}"
+: "${BLOCKED_SOFT_FILE:=/etc/vcrt/blocked_soft.db}"
+: "${BLOCKED_HARD_FILE:=/etc/vcrt/blocked_hard.db}"
 : "${TELEGRAM_CONF:=/etc/vcrt/telegram.conf}"
 : "${TRAFFIC_DAILY_DB:=/etc/vcrt/traffic_daily.db}"
 : "${TRAFFIC_HOURLY_DB:=/etc/vcrt/traffic_hourly.db}"

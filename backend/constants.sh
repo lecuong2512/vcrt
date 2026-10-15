@@ -4,9 +4,9 @@
 # Tương thích chuẩn POSIX / BusyBox OpenWrt
 # ==============================================================================
 
-BLOCKS_TIMED_FILE="/tmp/vcrt_blocks_timed.db"
-BLOCKED_SOFT_FILE="/tmp/vcrt_blocked_soft.db"
-BLOCKED_HARD_FILE="/tmp/vcrt_blocked_hard.db"
+BLOCKS_TIMED_FILE="/etc/vcrt/blocks_timed.db"
+BLOCKED_SOFT_FILE="/etc/vcrt/blocked_soft.db"
+BLOCKED_HARD_FILE="/etc/vcrt/blocked_hard.db"
 SESSIONS_DIR="/tmp/vcrt_sessions"
 CONFIG_DIR="/etc/vcrt"
 AUTH_FILE="/etc/vcrt/passwd"
