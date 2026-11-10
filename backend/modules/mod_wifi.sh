@@ -170,7 +170,20 @@ handle_wifi_apply() {
         uci set "${sec5}.key"="$PARAM_PASS5"
         uci set "${sec5}.encryption"="psk2+ccmp"
     fi
-    [ -n "$PARAM_CH5" ] && uci set "wireless.${RADIO_5G}.channel"="$PARAM_CH5"
+    if [ -n "$PARAM_CH5" ]; then
+        uci set "wireless.${RADIO_5G}.channel"="$PARAM_CH5"
+        case "$PARAM_CH5" in
+            52|56|60|64|100|104|108|112|116|120|124|128|132|136|140|144)
+                uci set "wireless.${RADIO_5G}.acs_exclude_dfs"='0'
+                ;;
+            *)
+                uci set "wireless.${RADIO_5G}.acs_exclude_dfs"='1'
+                ;;
+        esac
+    else
+        uci set "wireless.${RADIO_5G}.acs_exclude_dfs"='1'
+    fi
+    uci set "wireless.${RADIO_5G}.disabled"='0'
     [ -n "$PARAM_POWER5" ] && uci set "wireless.${RADIO_5G}.txpower"="$PARAM_POWER5"
 
     [ -n "$PARAM_SSID24" ] && uci set "${sec24}.ssid"="$PARAM_SSID24"
@@ -178,6 +191,7 @@ handle_wifi_apply() {
         uci set "${sec24}.key"="$PARAM_PASS24"
         uci set "${sec24}.encryption"="psk2+ccmp"
     fi
+    uci set "wireless.${RADIO_24G}.disabled"='0'
     [ -n "$PARAM_CH24" ] && uci set "wireless.${RADIO_24G}.channel"="$PARAM_CH24"
     [ -n "$PARAM_POWER24" ] && uci set "wireless.${RADIO_24G}.txpower"="$PARAM_POWER24"
 
@@ -207,83 +221,190 @@ handle_wifi_rollback() {
     json_ok '"action":"wifi_rollback","message":"Đã khôi phục cấu hình Wi-Fi ban đầu."'
 }
 
+_json_field() {
+    local json="$1" key="$2"
+    printf '%s' "$json" | sed -n "s/.*\"${key}\"[ ]*:[ ]*\"\([^\"]*\)\".*/\1/p" | head -n1
+}
+
+_parse_iw_scan_json() {
+    local band_label="$1"
+    awk -v band="$band_label" '
+    function jesc(s) {
+        gsub(/\\/, "\\\\", s);
+        gsub(/"/, "\\\"", s);
+        gsub(/\t/, " ", s);
+        return s;
+    }
+    function flush_bss() {
+        if (bssid != "" && ssid != "") {
+            if (!first) printf ",";
+            first = 0;
+            ch = 1;
+            if (freq > 5000) ch = int((freq - 5000) / 5);
+            else if (freq == 2484) ch = 14;
+            else if (freq > 2400) ch = int((freq - 2407) / 5);
+            dbm = int(sig);
+            pct = (dbm <= -100 ? 0 : (dbm >= -50 ? 100 : 2 * (dbm + 100)));
+            sec = "Open";
+            if (has_sae && has_psk) sec = "WPA2/WPA3";
+            else if (has_sae) sec = "WPA3 SAE";
+            else if (has_rsn && has_wpa) sec = "WPA/WPA2 PSK";
+            else if (has_rsn) sec = "WPA2 PSK";
+            else if (has_wpa) sec = "WPA PSK";
+            else if (has_priv) sec = "WEP/PSK";
+            essid_e = jesc(ssid);
+            bssid_u = toupper(bssid);
+            printf "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"channel\":\"%d\",\"signal\":%d,\"rssi\":%d,\"security\":\"%s\",\"encryption\":\"%s\",\"band\":\"%s\"}",
+                essid_e, bssid_u, ch, pct, dbm, sec, sec, band;
+        }
+    }
+    BEGIN { first = 1; printf "["; }
+    /^BSS / {
+        flush_bss();
+        bssid = $2; sub(/\(.*$/, "", bssid);
+        ssid = ""; freq = 0; sig = -100;
+        has_rsn = 0; has_wpa = 0; has_sae = 0; has_psk = 0; has_priv = 0;
+    }
+    /^[ \t]*freq:/ { freq = int($2); }
+    /^[ \t]*signal:/ { sig = int($2); }
+    /^[ \t]*capability:/ { if ($0 ~ /Privacy/) has_priv = 1; }
+    /^[ \t]*SSID:/ {
+        sub(/^[ \t]*SSID:[ \t]*/, "", $0);
+        ssid = $0;
+    }
+    /^[ \t]*RSN:/ { has_rsn = 1; }
+    /^[ \t]*WPA:/ { has_wpa = 1; }
+    /Authentication suites:/ {
+        if ($0 ~ /SAE/) has_sae = 1;
+        if ($0 ~ /PSK/) has_psk = 1;
+    }
+    END { flush_bss(); printf "]"; }
+    '
+}
+
+_parse_iwinfo_scan_json() {
+    local band_label="$1"
+    awk -v band="$band_label" '
+    function jesc(s) {
+        gsub(/\\/, "\\\\", s);
+        gsub(/"/, "\\\"", s);
+        gsub(/\t/, " ", s);
+        return s;
+    }
+    function flush_cell() {
+        if (bssid != "" && ssid != "" && ssid != "unknown") {
+            if (!first) printf ",";
+            first = 0;
+            dbm = int(sig);
+            pct = (dbm <= -100 ? 0 : (dbm >= -50 ? 100 : 2 * (dbm + 100)));
+            essid_e = jesc(ssid);
+            enc_e = jesc(enc);
+            printf "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"channel\":\"%d\",\"signal\":%d,\"rssi\":%d,\"security\":\"%s\",\"encryption\":\"%s\",\"band\":\"%s\"}",
+                essid_e, toupper(bssid), ch, pct, dbm, enc_e, enc_e, band;
+        }
+    }
+    BEGIN { first = 1; printf "["; }
+    /Cell [0-9]+/ {
+        flush_cell();
+        bssid = $5; ssid = ""; ch = 0; sig = -100; enc = "Open";
+    }
+    /ESSID:/ {
+        match($0, /"[^"]*"/);
+        if (RSTART > 0) ssid = substr($0, RSTART + 1, RLENGTH - 2);
+    }
+    /Channel:/ { ch = int($NF); }
+    /Signal:/ { sig = int($2); }
+    /Encryption:/ {
+        sub(/^[ \t]*Encryption:[ \t]*/, "", $0);
+        enc = ($0 == "none" ? "Open" : $0);
+    }
+    END { flush_cell(); printf "]"; }
+    '
+}
+
 handle_wifi_scan() {
+    _detect_radios
+
     local scan_band="${PARAM_BAND:-2.4g}"
-    [ -n "$POST_BODY" ] && [ -z "$PARAM_BAND" ] && scan_band=$(echo "$POST_BODY" | grep -o '"band":"[^"]*"' | head -n1 | cut -d'"' -f4)
+    [ -n "$POST_BODY" ] && [ -z "$PARAM_BAND" ] && scan_band=$(_json_field "$POST_BODY" "band")
     [ -z "$scan_band" ] && scan_band="2.4g"
 
-    local s_ifname="" ifc ch
-    for ifc in $(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}'); do
-        case "$ifc" in *sta*|*mon*) continue ;; esac
-        ch=$(iw dev "$ifc" info 2>/dev/null | awk '/channel/{print $2}')
-        case "$ch" in ''|*[!0-9]*) ch=6 ;; esac
-        if [ "$scan_band" = "5g" ] && [ "$ch" -gt 14 ] 2>/dev/null; then
-            s_ifname="$ifc"; break
-        elif [ "$scan_band" != "5g" ] && [ "$ch" -le 14 ] 2>/dev/null; then
-            s_ifname="$ifc"; break
-        fi
-    done
-    [ -z "$s_ifname" ] && [ "$scan_band" = "5g" ] && s_ifname="${IFACE_5G:-wlan1}"
-    [ -z "$s_ifname" ] && s_ifname="${IFACE_24G:-wlan0}"
-
-    local scan_out="" networks_json=""
-    if command -v iwinfo >/dev/null 2>&1; then
-        scan_out=$(iwinfo "$s_ifname" scan 2>/dev/null)
+    local target_radio="$RADIO_24G" band_label="2.4GHz" default_ifc="$IFACE_24G"
+    if [ "$scan_band" = "5g" ]; then
+        target_radio="$RADIO_5G"
+        band_label="5GHz"
+        default_ifc="$IFACE_5G"
     fi
 
-    if [ -n "$scan_out" ]; then
-        networks_json=$(echo "$scan_out" | awk '
-        function flush_cell() {
-            if (bssid != "" && ssid != "") {
-                if (!first) printf ",";
-                first = 0;
-                printf "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"channel\":%d,\"signal\":%d,\"encryption\":\"%s\"}", ssid, bssid, ch, sig, enc;
-            }
-        }
-        BEGIN { first = 1; printf "["; }
-        /Cell [0-9]+/ {
-            flush_cell();
-            bssid = $5; ssid = ""; ch = 0; sig = -100; enc = "none";
-        }
-        /ESSID:/ {
-            match($0, /"[^"]*"/);
-            if (RSTART > 0) ssid = substr($0, RSTART + 1, RLENGTH - 2);
-        }
-        /Channel:/ { ch = int($NF); }
-        /Signal:/ { sig = int($2); }
-        /Encryption:/ {
-            sub(/^[ \t]*Encryption:[ \t]*/, "", $0);
-            enc = $0;
-        }
-        END { flush_cell(); printf "]"; }
-        ')
-    else
-        scan_out=$(iw dev "$s_ifname" scan 2>/dev/null)
-        networks_json=$(echo "$scan_out" | awk '
-        function flush_bss() {
-            if (bssid != "" && ssid != "") {
-                if (!first) printf ",";
-                first = 0;
-                ch = 1;
-                if (freq > 5000) ch = int((freq - 5000) / 5);
-                else if (freq > 2400) ch = int((freq - 2407) / 5);
-                printf "{\"ssid\":\"%s\",\"bssid\":\"%s\",\"channel\":%d,\"signal\":%d,\"encryption\":\"%s\"}", ssid, bssid, ch, sig, enc;
-            }
-        }
-        BEGIN { first = 1; printf "["; }
-        /^BSS / {
-            flush_bss();
-            bssid = $2; sub(/\(.*$/, "", bssid); ssid = ""; freq = 0; sig = -100; enc = "none";
-        }
-        /^[ \t]*freq:/ { freq = int($2); }
-        /^[ \t]*signal:/ { sig = int($2); }
-        /^[ \t]*SSID:/ {
-            sub(/^[ \t]*SSID:[ \t]*/, "", $0);
-            ssid = $0;
-        }
-        /RSN:|WPA:/ { enc = "WPA2 PSK"; }
-        END { flush_bss(); printf "]"; }
-        ')
+    # Đảm bảo radio không bị tắt
+    local rad_disabled
+    rad_disabled=$(uci -q get "wireless.${target_radio}.disabled")
+    if [ "$rad_disabled" = "1" ]; then
+        uci set "wireless.${target_radio}.disabled"='0'
+        [ "$scan_band" = "5g" ] && uci set "wireless.${target_radio}.acs_exclude_dfs"='1'
+        uci commit wireless
+        wifi up "$target_radio" >/dev/null 2>&1 || wifi reload >/dev/null 2>&1
+        sleep 3
+    fi
+
+    local s_ifname="" sta_cand="" ifc ch
+    for ifc in $(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}'); do
+        case "$ifc" in *mon*) continue ;; esac
+        ch=$(iw dev "$ifc" info 2>/dev/null | awk '/channel/{print $2}')
+        case "$ch" in ''|*[!0-9]*) ch=0 ;; esac
+        if [ "$scan_band" = "5g" ] && [ "$ch" -gt 14 ] 2>/dev/null; then
+            case "$ifc" in
+                *sta*) [ -z "$sta_cand" ] && sta_cand="$ifc" ;;
+                *) s_ifname="$ifc"; break ;;
+            esac
+        elif [ "$scan_band" != "5g" ] && [ "$ch" -gt 0 ] && [ "$ch" -le 14 ] 2>/dev/null; then
+            case "$ifc" in
+                *sta*) [ -z "$sta_cand" ] && sta_cand="$ifc" ;;
+                *) s_ifname="$ifc"; break ;;
+            esac
+        fi
+    done
+    [ -z "$s_ifname" ] && s_ifname="$sta_cand"
+    [ -z "$s_ifname" ] && s_ifname="$default_ifc"
+
+    # Kiểm tra kênh DFS trên 5GHz: Linux mac80211/mt76x2e chặn scan (-EBUSY) nếu AP đang phát kênh DFS (52..144)
+    local cur_ch
+    cur_ch=$(iw dev "$s_ifname" info 2>/dev/null | awk '/channel/{print $2}')
+    case "$cur_ch" in ''|*[!0-9]*) cur_ch=0 ;; esac
+
+    local scan_out="" networks_json="[]"
+    scan_out=$(iw dev "$s_ifname" scan ap-force 2>&1)
+
+    if [ "$scan_band" = "5g" ] && echo "$scan_out" | grep -qiE "Resource busy|-16"; then
+        # Nếu đang bị kẹt DFS trên AP và không có STA phụ thuộc kênh DFS -> chuyển sang kênh non-DFS CH 36 (5180 MHz) để quét
+        local phy_idx has_sta_on_phy=0
+        phy_idx=$(iw dev "$s_ifname" info 2>/dev/null | awk '/wiphy/{print $2}')
+        if [ -n "$phy_idx" ]; then
+            iw dev 2>/dev/null | awk -v p="$phy_idx" '$1=="phy#"p{in_p=1; next} /^phy#/{in_p=0} in_p && /type managed/{found=1} END{exit !found}' && has_sta_on_phy=1
+        fi
+        if [ "$has_sta_on_phy" -eq 0 ]; then
+            uci set "wireless.${RADIO_5G}.acs_exclude_dfs"='1'
+            uci set "wireless.${RADIO_5G}.channel"='36'
+            uci commit wireless
+            ubus call "hostapd.${s_ifname}" switch_chan '{"freq":5180,"bcn_count":2,"center_freq1":5210,"bandwidth":80,"sec_channel_offset":1,"ht":true,"vht":true,"force":true}' >/dev/null 2>&1 || true
+            sleep 2
+            scan_out=$(iw dev "$s_ifname" scan ap-force 2>&1)
+            if echo "$scan_out" | grep -qiE "Resource busy|-16"; then
+                wifi up "$RADIO_5G" >/dev/null 2>&1 || wifi reload >/dev/null 2>&1
+                sleep 4
+                scan_out=$(iw dev "$s_ifname" scan ap-force 2>&1)
+            fi
+        fi
+    fi
+
+    if echo "$scan_out" | grep -q "^BSS "; then
+        networks_json=$(printf '%s\n' "$scan_out" | _parse_iw_scan_json "$band_label")
+    elif command -v iwinfo >/dev/null 2>&1; then
+        local iw_out
+        iw_out=$(iwinfo "$s_ifname" scan 2>/dev/null)
+        if [ -n "$iw_out" ]; then
+            networks_json=$(printf '%s\n' "$iw_out" | _parse_iwinfo_scan_json "$band_label")
+        fi
     fi
     [ -z "$networks_json" ] && networks_json="[]"
 
@@ -291,26 +412,75 @@ handle_wifi_scan() {
 }
 
 handle_wifi_connect_uplink() {
-    local u_ssid="${PARAM_SSID:-$PARAM_SSID5}"
+    local u_ssid="" u_pass="" u_band="" u_channel="" u_bssid="" u_security=""
+
+    if [ -n "$POST_BODY" ]; then
+        u_ssid=$(_json_field "$POST_BODY" "ssid")
+        u_pass=$(_json_field "$POST_BODY" "key")
+        [ -z "$u_pass" ] && u_pass=$(_json_field "$POST_BODY" "pass")
+        u_band=$(_json_field "$POST_BODY" "band")
+        u_channel=$(_json_field "$POST_BODY" "channel")
+        [ -z "$u_channel" ] && u_channel=$(printf '%s' "$POST_BODY" | sed -n 's/.*"channel"[ ]*:[ ]*\([0-9][0-9]*\).*/\1/p' | head -n1)
+        u_bssid=$(_json_field "$POST_BODY" "bssid")
+        u_security=$(_json_field "$POST_BODY" "security")
+    fi
+
+    [ -z "$u_ssid" ] && u_ssid="${PARAM_SSID:-$PARAM_SSID5}"
     [ -z "$u_ssid" ] && u_ssid="${PARAM_SSID24}"
-    [ -z "$u_ssid" ] && [ -n "$POST_BODY" ] && u_ssid=$(echo "$POST_BODY" | grep -o '"ssid":"[^"]*"' | head -n1 | cut -d'"' -f4)
+    [ -z "$u_pass" ] && u_pass="${PARAM_KEY:-${PARAM_PASS:-$PARAM_PASS5}}"
+    [ -z "$u_band" ] && u_band="${PARAM_BAND:-2.4g}"
+    [ -z "$u_channel" ] && u_channel="$PARAM_CHANNEL"
+    [ -z "$u_bssid" ] && u_bssid="$PARAM_BSSID"
+    [ -z "$u_security" ] && u_security="$PARAM_SECURITY"
 
-    local u_pass="${PARAM_PASS:-$PARAM_PASS5}"
-    [ -z "$u_pass" ] && u_pass="${PARAM_KEY}"
-    [ -z "$u_pass" ] && [ -n "$POST_BODY" ] && u_pass=$(echo "$POST_BODY" | grep -o '"pass":"[^"]*"' | head -n1 | cut -d'"' -f4)
-
-    local u_band="${PARAM_BAND:-2.4g}"
-    [ -n "$POST_BODY" ] && [ -z "$PARAM_BAND" ] && u_band=$(echo "$POST_BODY" | grep -o '"band":"[^"]*"' | head -n1 | cut -d'"' -f4)
     [ -z "$u_band" ] && u_band="2.4g"
-
     [ -z "$u_ssid" ] && { json_error "Thiếu tên Wi-Fi (SSID)"; return 1; }
 
     local sta_bak="/tmp/vcrt_wireless_sta.bak"
     cp -f /etc/config/wireless "$sta_bak" 2>/dev/null || true
 
     _detect_radios
-    local target_radio="$RADIO_24G"
-    [ "$u_band" = "5g" ] && target_radio="$RADIO_5G"
+    local target_radio="$RADIO_24G" target_phy_idx="1" max_wait=16
+    if [ "$u_band" = "5g" ]; then
+        target_radio="$RADIO_5G"
+        target_phy_idx="0"
+        max_wait=25
+    fi
+
+    # Dò tìm đúng phy index từ path/phy trong UCI nếu có
+    local r_path r_phy
+    r_path=$(uci -q get "wireless.${target_radio}.path")
+    r_phy=$(uci -q get "wireless.${target_radio}.phy")
+    if [ -n "$r_phy" ]; then
+        target_phy_idx=$(echo "$r_phy" | tr -dc '0-9')
+    elif [ -n "$r_path" ]; then
+        for pdir in /sys/class/ieee80211/phy*; do
+            [ -e "$pdir/device" ] || continue
+            if readlink -f "$pdir/device" 2>/dev/null | grep -q "$r_path"; then
+                target_phy_idx=$(basename "$pdir" | tr -dc '0-9')
+                break
+            fi
+        done
+    fi
+
+    # Đảm bảo radio bật và đồng bộ kênh an toàn (tránh AP bị kẹt DFS 60s trước khi STA kịp quét)
+    uci set "wireless.${target_radio}.disabled"='0'
+    if [ "$u_band" = "5g" ]; then
+        uci set "wireless.${target_radio}.acs_exclude_dfs"='1'
+        case "$u_channel" in
+            36|40|44|48|149|153|157|161|165)
+                uci set "wireless.${target_radio}.channel"="$u_channel"
+                ;;
+            *)
+                # Kênh gốc là DFS hoặc không rõ -> đặt non-DFS auto để AP lên ngay, sau đó STA sẽ kéo AP theo kênh gốc
+                uci set "wireless.${target_radio}.channel"='auto'
+                ;;
+        esac
+    elif [ -n "$u_channel" ]; then
+        case "$u_channel" in
+            [1-9]|1[0-3]) uci set "wireless.${target_radio}.channel"="$u_channel" ;;
+        esac
+    fi
 
     # Cấu hình network.wwan nếu chưa có
     if ! uci -q get network.wwan >/dev/null; then
@@ -338,30 +508,45 @@ handle_wifi_connect_uplink() {
         uci delete "$s"
     done
 
+    local enc="psk2"
+    if [ -z "$u_pass" ]; then
+        enc="none"
+    else
+        case "$u_security" in
+            *WPA2/WPA3*) enc="sae-mixed" ;;
+            *SAE*|*WPA3*)
+                if echo "$u_security" | grep -qi "PSK"; then enc="sae-mixed"; else enc="sae"; fi
+                ;;
+            *WPA\ PSK*)
+                if echo "$u_security" | grep -qi "WPA2\|RSN"; then enc="psk2"; else enc="psk"; fi
+                ;;
+        esac
+    fi
+
     uci set wireless.sta=wifi-iface
     uci set wireless.sta.device="$target_radio"
     uci set wireless.sta.mode='sta'
     uci set wireless.sta.network='wwan'
     uci set wireless.sta.ssid="$u_ssid"
-    if [ -n "$u_pass" ]; then
-        uci set wireless.sta.encryption='psk2'
-        uci set wireless.sta.key="$u_pass"
-    else
-        uci set wireless.sta.encryption='none'
-    fi
+    uci set wireless.sta.encryption="$enc"
+    [ -n "$u_pass" ] && uci set wireless.sta.key="$u_pass"
     uci commit wireless
+
+    local log_mark
+    log_mark=$(logread 2>/dev/null | wc -l)
+    case "$log_mark" in ''|*[!0-9]*) log_mark=0 ;; esac
 
     wifi reload >/dev/null 2>&1
     sleep 1
     ifup wwan >/dev/null 2>&1
 
-    # Kiểm tra 4-Way Handshake tối đa 7s
+    # Kiểm tra kết nối & 4-Way Handshake (tối đa 25s cho 5GHz, 16s cho 2.4GHz)
     local sta_iface="" connected=0 auth_failed=0 i=0
-    while [ "$i" -lt 7 ]; do
+    while [ "$i" -lt "$max_wait" ]; do
         sleep 1
         i=$((i + 1))
 
-        if logread 2>/dev/null | tail -n 40 | grep -qiE "4-Way Handshake failed|pre-shared key may be incorrect|wrong key|MIC failure"; then
+        if logread 2>/dev/null | tail -n +"$((log_mark + 1))" | grep -qiE "4-Way Handshake failed|pre-shared key may be incorrect|wrong key|MIC failure"; then
             auth_failed=1
             break
         fi
@@ -369,12 +554,21 @@ handle_wifi_connect_uplink() {
         if [ -z "$sta_iface" ]; then
             local cand
             for cand in $(iw dev 2>/dev/null | awk '$1=="Interface"{print $2}'); do
-                case "$cand" in *sta*) sta_iface="$cand"; break ;; esac
+                case "$cand" in
+                    phy${target_phy_idx}-sta*|*sta*)
+                        sta_iface="$cand"
+                        case "$cand" in phy${target_phy_idx}-sta*) break ;; esac
+                        ;;
+                esac
             done
         fi
 
         if [ -n "$sta_iface" ]; then
             if iw dev "$sta_iface" link 2>/dev/null | grep -q "Connected to"; then
+                connected=1
+                break
+            fi
+            if ubus call "wpa_supplicant.${sta_iface}" iface_status 2>/dev/null | grep -q '"state": "COMPLETED"'; then
                 connected=1
                 break
             fi

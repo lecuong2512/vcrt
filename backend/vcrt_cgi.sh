@@ -15,6 +15,7 @@ ACTION="" MAC="" TYPE="" PARAM_PROFILE="" PARAM_ENDPOINT="" PARAM_METHOD=""
 PARAM_APIKEY="" PARAM_BODY="" PARAM_SSID="" PARAM_SSID5="" PARAM_PASS5=""
 PARAM_CH5="" PARAM_POWER5="" PARAM_POWER24="" PARAM_SSID24="" PARAM_PASS24=""
 PARAM_CH24="" PARAM_BAND="" PARAM_BSSID="" PARAM_KEY="" PARAM_MINUTES=""
+PARAM_CHANNEL="" PARAM_SECURITY=""
 PARAM_NAME="" PARAM_IP="" PARAM_USER="" PARAM_PASS="" PARAM_NEW_PASS=""
 PARAM_TOKEN="" PARAM_BOT_TOKEN="" PARAM_CHAT_ID="" PARAM_NOTIF_WIFI=""
 PARAM_NOTIF_EXPIRE="" PARAM_NOTIF_DAILY="" PARAM_DAILY_HOUR=""
@@ -43,6 +44,8 @@ for item in $QUERY_STRING; do
         ch24=*) PARAM_CH24="${item#ch24=}" ;;
         band=*) PARAM_BAND="${item#band=}" ;;
         bssid=*) PARAM_BSSID="${item#bssid=}" ;;
+        channel=*) PARAM_CHANNEL="${item#channel=}" ;;
+        security=*) PARAM_SECURITY="${item#security=}" ;;
         key=*|nwid=*|network_id=*) PARAM_KEY="${item#*=}" ;;
         minutes=*|duration=*) PARAM_MINUTES="${item#*=}" ;;
         name=*) PARAM_NAME="${item#name=}" ;;

@@ -161,7 +161,8 @@ export default function WiFiScreen() {
         ssid: selectedNetwork.ssid,
         bssid: selectedNetwork.bssid,
         key: uplinkPass,
-        channel: selectedNetwork.channel
+        channel: selectedNetwork.channel,
+        security: selectedNetwork.security || selectedNetwork.encryption
       });
       success(`Đang thiết lập kết nối WISP tới "${selectedNetwork.ssid}"...`);
       setScanModalOpen(false);
@@ -175,7 +176,7 @@ export default function WiFiScreen() {
   };
 
   const channels5G = [
-    { val: 'auto', label: 'Tự động (Auto)' },
+    { val: 'auto', label: 'Tự động (Auto - Tránh DFS)' },
     { val: '36', label: 'CH 36 (5180 MHz - Tốt cho nhà riêng)' },
     { val: '40', label: 'CH 40 (5200 MHz)' },
     { val: '44', label: 'CH 44 (5220 MHz)' },
@@ -389,12 +390,12 @@ export default function WiFiScreen() {
                       {net.ssid || '<Mạng Ẩn SSID>'}
                     </div>
                     <div className="text-xs text-slate-400 font-mono mt-0.5">
-                      CH {net.channel} • {net.security}
+                      CH {net.channel} • {net.security || net.encryption || 'Open'}
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-mono font-bold text-blue-600 dark:text-blue-400">
-                      {net.signal}%
+                      {net.signal}%{typeof net.rssi === 'number' && net.rssi < 0 ? ` (${net.rssi} dBm)` : ''}
                     </span>
                     <span className="text-xs text-slate-400">➔</span>
                   </div>

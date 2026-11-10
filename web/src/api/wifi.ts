@@ -20,7 +20,9 @@ export interface ScannedNetwork {
   bssid: string;
   channel: string;
   signal: number;
+  rssi?: number;
   security: string;
+  encryption?: string;
   band: string;
 }
 
@@ -41,8 +43,8 @@ export async function applyWifiConfig(config: {
   return await postApi('wifi_apply', config, config);
 }
 
-export async function scanWifi(band: '2.4g' | '5g'): Promise<{ networks: ScannedNetwork[] } | null> {
-  return await fetchApi('wifi_scan', { band });
+export async function scanWifi(band: '2.4g' | '5g'): Promise<{ networks: ScannedNetwork[]; status?: string; msg?: string } | null> {
+  return await fetchApi('wifi_scan', { band }, 30000);
 }
 
 export async function connectWifiUplink(params: {
@@ -51,8 +53,9 @@ export async function connectWifiUplink(params: {
   bssid: string;
   key: string;
   channel?: string;
+  security?: string;
 }) {
-  return await postApi('wifi_connect_uplink', params, params);
+  return await postApi('wifi_connect_uplink', params, params, 40000);
 }
 
 export async function rollbackWifiConfig() {

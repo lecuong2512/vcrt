@@ -188,7 +188,10 @@ if [ -n "$zt_startup_ip" ]; then
 🌐 <b>ZeroTier IP:</b> <code>${zt_startup_ip}</code> — <i>Truy cập: http://${zt_startup_ip}/vcrt/</i>"
 fi
 
-send_msg "🟢 <b>VCRT OS v2.0 - TELEGRAM BOT ĐÃ SẴN SÀNG!</b>
+bot_ver=$(normalize_version "$(cat "${VERSION_FILE:-/etc/vcrt/version}" 2>/dev/null || echo "2.2.0")")
+[ -z "$bot_ver" ] && bot_ver="2.2.0"
+
+send_msg "🟢 <b>VCRT OS v${bot_ver} - TELEGRAM BOT ĐÃ SẴN SÀNG!</b>
 ━━━━━━━━━━━━━━━━━━
 ⚡ Hệ thống giám sát thiết bị & lưu lượng 24/7 đang hoạt động.
 📡 Quản lý Wi-Fi 2.4G & 5G · NextDNS Cloud · ZeroTier VPN${zt_intro}

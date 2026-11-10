@@ -22,9 +22,11 @@ watch_wifi_devices() {
         curr_macs=$(awk -F'|' '{print tolower($1)}' "$wifi_tmp" 2>/dev/null | sort -u)
 
         if [ -n "$last_macs" ]; then
+            local last_macs_sp
+            last_macs_sp=" $(printf '%s' "$last_macs" | tr '\n' ' ') "
             for m in $curr_macs; do
-                if ! printf '%s\n' "$last_macs" | grep -qi "^${m}$"; then
-                    sleep 1
+                case "$last_macs_sp" in *" $m "*) continue ;; esac
+                sleep 1
                     local mac_up
                     mac_up=$(printf '%s' "$m" | tr 'a-z' 'A-Z')
 
@@ -65,7 +67,6 @@ watch_wifi_devices() {
 ━━━━━━━━━━━━━━━━━━
 <i>Gõ /clients để xem danh sách máy online</i>"
                     send_msg "$alert_msg"
-                fi
             done
         fi
         last_macs="$curr_macs"
@@ -287,29 +288,34 @@ watch_system_updates() {
         sleep 21600
         load_config
 
-        # 1. Kiểm tra cập nhật VCRT OS trên GitHub
-        local cur_ver
-        cur_ver=$(cat "$ver_file" 2>/dev/null || echo "2.0.0")
-        local remote_ver
-        remote_ver=$(curl -s --max-time 5 "https://raw.githubusercontent.com/lecuong2512/vcrt/main/version" 2>/dev/null | tr -d ' \r\n"')
+        # 1. Kiểm tra cập nhật VCRT OS trên GitHub (so sánh semver thực sự + chống spam trùng)
+        local cur_ver remote_ver cb
+        cur_ver=$(normalize_version "$(cat "$ver_file" 2>/dev/null || echo "2.2.0")")
+        [ -z "$cur_ver" ] && cur_ver="2.2.0"
+        cb=$(date +%s 2>/dev/null || echo 1)
+        remote_ver=$(normalize_version "$(curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 8 "https://raw.githubusercontent.com/lecuong2512/vcrt/main/version?_=${cb}" 2>/dev/null)")
 
-        if [ -n "$remote_ver" ] && [ "$cur_ver" != "$remote_ver" ] && printf '%s' "$remote_ver" | grep -qE '^[0-9]+(\.[0-9]+)+$'; then
+        if [ -n "$remote_ver" ] && printf '%s' "$remote_ver" | grep -qE '^[0-9]+(\.[0-9]+)+$' && version_gt "$remote_ver" "$cur_ver"; then
             if [ "$AUTO_UPDATE" = "1" ]; then
                 send_msg "🚀 <b>TỰ ĐỘNG CẬP NHẬT VCRT OS: v${remote_ver}</b>
 ━━━━━━━━━━━━━━━━━━
 ⚙️ Đang tải và cài đặt bản cập nhật mới nhất theo cài đặt của bạn..."
-                (
-                    curl -s -L -k -o /tmp/deploy_vcrt.tar.gz "https://raw.githubusercontent.com/lecuong2512/vcrt/main/deploy_vcrt.tar.gz" && \
-                    cd /tmp && tar -xzf deploy_vcrt.tar.gz && sh install.sh
-                ) >/dev/null 2>&1 &
+                run_vcrt_self_update
             else
-                send_msg "🔔 <b>THÔNG BÁO BẢN CẬP NHẬT MỚI: v${remote_ver}</b>
+                local last_notified=""
+                [ -f /tmp/vcrt_notified_ver.tmp ] && read -r last_notified < /tmp/vcrt_notified_ver.tmp 2>/dev/null
+                if [ "$last_notified" != "$remote_ver" ]; then
+                    printf '%s' "$remote_ver" > /tmp/vcrt_notified_ver.tmp 2>/dev/null
+                    send_msg "🔔 <b>THÔNG BÁO BẢN CẬP NHẬT MỚI: v${remote_ver}</b>
 ━━━━━━━━━━━━━━━━━━
 🏷 Phiên bản hiện tại: <code>v${cur_ver}</code>
 ✨ Phiên bản mới: <code>v${remote_ver}</code>
 ━━━━━━━━━━━━━━━━━━
 Gõ hoặc bấm <code>/update now</code> để cập nhật ngay lập tức!"
+                fi
             fi
+        else
+            rm -f /tmp/vcrt_notified_ver.tmp 2>/dev/null || true
         fi
 
         # 2. Kiểm tra trạng thái ZeroTier IP

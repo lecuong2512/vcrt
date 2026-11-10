@@ -39,7 +39,8 @@ export function clearSession() {
 
 export async function fetchApi<T = any>(
   action: string,
-  params: Record<string, string | number | boolean | undefined> = {}
+  params: Record<string, string | number | boolean | undefined> = {},
+  timeoutMs = 8000
 ): Promise<T | null> {
   const token = getStoredToken();
   const queryObj: Record<string, string> = { action };
@@ -62,7 +63,7 @@ export async function fetchApi<T = any>(
       },
       credentials: 'same-origin',
       cache: 'no-store',
-      signal: AbortSignal.timeout(7000)
+      signal: AbortSignal.timeout(timeoutMs)
     });
 
     if (res.status === 401 && action !== 'login' && action !== 'auth_check') {
@@ -93,7 +94,8 @@ export async function fetchApi<T = any>(
 export async function postApi<T = any>(
   action: string,
   bodyData: Record<string, any> = {},
-  params: Record<string, string | number | boolean | undefined> = {}
+  params: Record<string, string | number | boolean | undefined> = {},
+  timeoutMs = 12000
 ): Promise<T | null> {
   const token = getStoredToken();
   const queryObj: Record<string, string> = { action };
@@ -120,7 +122,7 @@ export async function postApi<T = any>(
       credentials: 'same-origin',
       cache: 'no-store',
       body: JSON.stringify(fullBody),
-      signal: AbortSignal.timeout(10000)
+      signal: AbortSignal.timeout(timeoutMs)
     });
 
     if (res.status === 401 && action !== 'login') {

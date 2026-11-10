@@ -1,0 +1,6 @@
+{
+  "version": "2.2.0",
+  "url": "https://raw.githubusercontent.com/lecuong2512/vcrt/main/deploy_vcrt.tar.gz",
+  "sha256": "49c6e1bdbed26899796d369613a79db5b4d03283a2c55be9bfed6341c24a0537",
+  "changelog": "Fix 5GHz Wi-Fi DFS scan 'No data' / WISP stability and Telegram Bot false update notification"
+}

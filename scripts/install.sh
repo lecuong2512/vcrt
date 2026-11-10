@@ -233,7 +233,6 @@ fi
 if [ -f /etc/init.d/vcrt_bot ]; then
     chmod +x /etc/init.d/vcrt_bot
     /etc/init.d/vcrt_bot enable 2>/dev/null || true
-    /etc/init.d/vcrt_bot restart 2>/dev/null || true
 fi
 
 # 9. Cau hinh Ten mien Cuc bo (DNS Local: vcrt.lan)
@@ -343,9 +342,27 @@ chmod +x /www/cgi-bin/vcrt \
          /www/cgi-bin/lib/*.sh \
          /www/cgi-bin/modules/*.sh \
          /www/cgi-bin/platforms/*.sh \
-         /usr/bin/vcrt_bot.sh 2>/dev/null || true
+         /usr/bin/vcrt_bot.sh \
+         /usr/lib/vcrt_bot/*.sh 2>/dev/null || true
 
-# Don dep tap tin tam sau cai dat
+# Bao dam bang tan 5GHz tranh kenh DFS (khac phuc loi quet Wi-Fi "No data")
+_wifi_changed=0
+for _wdev in $(uci show wireless 2>/dev/null | sed -n 's/^wireless\.\([^.=]*\)=wifi-device$/\1/p'); do
+    _wband=$(uci -q get "wireless.${_wdev}.band" 2>/dev/null)
+    _whw=$(uci -q get "wireless.${_wdev}.hwmode" 2>/dev/null)
+    if [ "$_wband" = "5g" ] || [ "$_wband" = "5G" ] || [ "$_whw" = "11a" ]; then
+        if [ "$(uci -q get "wireless.${_wdev}.acs_exclude_dfs" 2>/dev/null)" != "1" ]; then
+            uci set "wireless.${_wdev}.acs_exclude_dfs=1" 2>/dev/null && _wifi_changed=1
+        fi
+    fi
+done
+if [ "$_wifi_changed" = "1" ]; then
+    uci commit wireless 2>/dev/null || true
+    wifi reconf 2>/dev/null || true
+fi
+
+# Don dep tap tin tam va trang thai thong bao cu sau cai dat
+rm -f /tmp/vcrt_notified_ver.tmp 2>/dev/null || true
 rm -rf /tmp/vcrt /tmp/vcrt_bot /tmp/vcrt_bot.sh /tmp/www /tmp/deploy_vcrt.tar.gz /tmp/vcrt_deploy 2>/dev/null || true
 
 # Restart network services
@@ -353,8 +370,11 @@ rm -rf /tmp/vcrt /tmp/vcrt_bot /tmp/vcrt_bot.sh /tmp/www /tmp/deploy_vcrt.tar.gz
 /etc/init.d/firewall restart 2>/dev/null || true
 /etc/init.d/uhttpd restart 2>/dev/null || true
 
+install_ver=$(cat /etc/vcrt/version 2>/dev/null | tr -d ' \r\n"' | sed 's/^[vV]//')
+[ -z "$install_ver" ] && install_ver="2.2.0"
+
 echo "=================================================================="
-echo "🎉 VCRT OS v2.0 DA DUOC CAI DAT VA KHOI CHAY THANH CONG!"
+echo "🎉 VCRT OS v${install_ver} DA DUOC CAI DAT VA KHOI CHAY THANH CONG!"
 echo "   - Web Dashboard: http://${lan_ip}/vcrt/ hoac http://vcrt.lan/vcrt/"
 echo "   - API Endpoint : http://${lan_ip}/cgi-bin/vcrt"
 echo "=================================================================="
@@ -372,14 +392,23 @@ if [ -f "$CONF_FILE" ]; then
                 --data-urlencode "chat_id=${clean_cid}" \
                 --data-urlencode "parse_mode=HTML" \
                 --data-urlencode "reply_markup=${KEYBOARD}" \
-                --data-urlencode "text=🚀 <b>VCRT OS v2.0 - TRIỂN KHAI HOÀN TẤT!</b>
+                --data-urlencode "text=🚀 <b>VCRT OS v${install_ver} - TRIỂN KHAI HOÀN TẤT!</b>
 ━━━━━━━━━━━━━━━━━━
 ⬡ <b>Thiết bị:</b> ${DEVICE_NAME_DEFAULT:-$model_id}
 ⬡ <b>Nền tảng:</b> ${PLATFORM_ID:-generic}
 ⬡ <b>IP Quản trị:</b> http://${lan_ip} (hoặc http://vcrt.lan)
-📱 <i>Bot Telegram v2.0 sẵn sàng phục vụ! Gõ /help để bắt đầu.</i>" >/dev/null 2>&1 || true
+📱 <i>Bot Telegram v${install_ver} sẵn sàng phục vụ! Gõ /help để bắt đầu.</i>" >/dev/null 2>&1 || true
         done
         echo ">> Da gui thong bao he thong den Telegram cua ban!"
+    fi
+fi
+
+# Khoi dong lai Telegram bot o buoc cuoi cung sau khi moi tep da san sang
+if [ -x /etc/init.d/vcrt_bot ]; then
+    if command -v setsid >/dev/null 2>&1; then
+        setsid sh -c 'sleep 2; /etc/init.d/vcrt_bot restart >/dev/null 2>&1' </dev/null >/dev/null 2>&1 &
+    else
+        ( sleep 2; /etc/init.d/vcrt_bot restart ) </dev/null >/dev/null 2>&1 &
     fi
 fi
 

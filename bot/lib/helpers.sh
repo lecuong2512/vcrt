@@ -280,3 +280,47 @@ send_document() {
         -F "document=@${file_path}" \
         -F "caption=${caption}" >/dev/null 2>&1 || true
 }
+
+# ─── CHUẨN HÓA & SO SÁNH PHIÊN BẢN SEMVER + CẬP NHẬT TÁCH BIỆT ──────────────
+normalize_version() {
+    printf '%s' "$1" | tr -d ' \r\n"' | sed 's/^[vV]//'
+}
+
+version_gt() {
+    awk -v a="$1" -v b="$2" '
+    BEGIN {
+        na = split(a, va, ".");
+        nb = split(b, vb, ".");
+        n = (na > nb ? na : nb);
+        for (i = 1; i <= n; i++) {
+            xa = (i <= na ? int(va[i]) : 0);
+            xb = (i <= nb ? int(vb[i]) : 0);
+            if (xa > xb) exit 0;
+            if (xa < xb) exit 1;
+        }
+        exit 1;
+    }'
+}
+
+run_vcrt_self_update() {
+    cat << 'EOF' > /tmp/vcrt_self_update.sh
+#!/bin/sh
+pkg_file="/tmp/deploy_vcrt.tar.gz"
+work_dir="/tmp/vcrt_deploy"
+rm -rf "$pkg_file" "$work_dir" 2>/dev/null
+mkdir -p "$work_dir"
+if curl -4 --tlsv1.2 --tls-max 1.2 -s -L -k --max-time 60 -o "$pkg_file" "https://raw.githubusercontent.com/lecuong2512/vcrt/main/deploy_vcrt.tar.gz?_=$(date +%s)" && \
+   [ -s "$pkg_file" ] && \
+   tar -xzf "$pkg_file" -C "$work_dir" 2>/dev/null && \
+   [ -f "$work_dir/install.sh" ]; then
+    sh "$work_dir/install.sh" >/tmp/vcrt_update.log 2>&1
+fi
+rm -rf "$pkg_file" "$work_dir" /tmp/vcrt_self_update.sh 2>/dev/null
+EOF
+    chmod +x /tmp/vcrt_self_update.sh
+    if command -v setsid >/dev/null 2>&1; then
+        setsid sh /tmp/vcrt_self_update.sh </dev/null >/dev/null 2>&1 &
+    else
+        sh /tmp/vcrt_self_update.sh </dev/null >/dev/null 2>&1 &
+    fi
+}

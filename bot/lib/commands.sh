@@ -702,21 +702,21 @@ cmd_update() {
     local target_chat="$2"
     local ver_file="${VERSION_FILE:-/etc/vcrt/version}"
     local cur_ver
-    cur_ver=$(cat "$ver_file" 2>/dev/null || echo "2.0.0")
+    cur_ver=$(normalize_version "$(cat "$ver_file" 2>/dev/null || echo "0.0.0")")
+    [ -z "$cur_ver" ] && cur_ver="0.0.0"
 
     if [ "$sub_arg" = "now" ] || [ "$sub_arg" = "install" ] || [ "$sub_arg" = "yes" ]; then
         send_msg "🚀 <b>ĐANG CẬP NHẬT VCRT OS TỪ GITHUB...</b>
 ━━━━━━━━━━━━━━━━━━
 <i>Hệ thống đang tải gói deploy_vcrt.tar.gz và tự động cài đặt. Dịch vụ sẽ tự khởi động lại sau giây lát...</i>" "$target_chat"
-        (
-            curl -s -L -k -o /tmp/deploy_vcrt.tar.gz "https://raw.githubusercontent.com/lecuong2512/vcrt/main/deploy_vcrt.tar.gz" && \
-            cd /tmp && tar -xzf deploy_vcrt.tar.gz && sh install.sh
-        ) >/dev/null 2>&1 &
+        run_vcrt_self_update
         return 0
     fi
 
-    local remote_ver
-    remote_ver=$(curl -s --max-time 5 "https://raw.githubusercontent.com/lecuong2512/vcrt/main/version" 2>/dev/null | tr -d ' \r\n"')
+    local cb remote_ver
+    cb=$(date +%s 2>/dev/null || echo 1)
+    remote_ver=$(curl -4 --tlsv1.2 --tls-max 1.2 -s --max-time 6 "https://raw.githubusercontent.com/lecuong2512/vcrt/main/version?_=${cb}" 2>/dev/null)
+    remote_ver=$(normalize_version "$remote_ver")
     if [ -z "$remote_ver" ] || ! printf '%s' "$remote_ver" | grep -qE '^[0-9]+(\.[0-9]+)+$'; then
         send_msg "⚠️ <b>Không thể kiểm tra phiên bản mới trên GitHub!</b>
 ━━━━━━━━━━━━━━━━━━
@@ -725,18 +725,19 @@ Vui lòng kiểm tra lại kết nối Internet hoặc thử lại sau.</i>" "$t
         return 1
     fi
 
-    if [ "$cur_ver" = "$remote_ver" ]; then
-        send_msg "✅ <b>Hệ thống đang chạy phiên bản mới nhất!</b>
-━━━━━━━━━━━━━━━━━━
-🏷 <b>Phiên bản VCRT OS:</b> <code>v${cur_ver}</code>
-🛡 Tất cả tính năng và bản vá bảo mật đã được cập nhật đầy đủ." "$target_chat"
-    else
+    if version_gt "$remote_ver" "$cur_ver"; then
         send_msg "🚀 <b>PHÁT HIỆN BẢN CẬP NHẬT MỚI: v${remote_ver}</b>
 ━━━━━━━━━━━━━━━━━━
 🏷 <b>Phiên bản hiện tại:</b> <code>v${cur_ver}</code>
 ✨ <b>Phiên bản mới nhất:</b> <code>v${remote_ver}</code>
 ━━━━━━━━━━━━━━━━━━
 Gõ hoặc bấm <code>/update now</code> để tự động nâng cấp ngay lập tức!" "$target_chat"
+    else
+        send_msg "✅ <b>Hệ thống đang chạy phiên bản mới nhất!</b>
+━━━━━━━━━━━━━━━━━━
+🏷 <b>Phiên bản VCRT OS:</b> <code>v${cur_ver}</code>
+🌐 <b>Phiên bản trên máy chủ:</b> <code>v${remote_ver}</code>
+🛡 Tất cả tính năng và bản vá bảo mật đã được cập nhật đầy đủ." "$target_chat"
     fi
 }
 
@@ -751,7 +752,10 @@ cmd_reboot() {
 # ─── CMD 13: /logo — THÔNG TIN BIỂU TƯỢNG VCRT OS ────────────────────────────
 cmd_logo() {
     local target_chat="$1"
-    local msg="⬡ <b>VCRT OS v2.0 · CYBER ROUTER SYSTEM</b> ⬡
+    local cur_ver
+    cur_ver=$(normalize_version "$(cat "${VERSION_FILE:-/etc/vcrt/version}" 2>/dev/null || echo "2.2.0")")
+    [ -z "$cur_ver" ] && cur_ver="2.2.0"
+    local msg="⬡ <b>VCRT OS v${cur_ver} · CYBER ROUTER SYSTEM</b> ⬡
 ━━━━━━━━━━━━━━━━━━
 🛡 <b>Hệ Điều Hành Router Thông Minh Đa Nhiệm</b>
 ⚡ Kiến trúc Micro-Daemon hiệu năng cao trên OpenWrt
@@ -764,7 +768,10 @@ cmd_logo() {
 # ─── CMD 14: /help — BẢNG HƯỚNG DẪN ĐIỀU KHIỂN ───────────────────────────────
 cmd_help() {
     local target_chat="$1"
-    local msg="🤖 <b>VCRT OS v2.0 · TRỢ LÝ ĐIỀU HÀNH ROUTER 24/7</b>
+    local cur_ver
+    cur_ver=$(normalize_version "$(cat "${VERSION_FILE:-/etc/vcrt/version}" 2>/dev/null || echo "2.2.0")")
+    [ -z "$cur_ver" ] && cur_ver="2.2.0"
+    local msg="🤖 <b>VCRT OS v${cur_ver} · TRỢ LÝ ĐIỀU HÀNH ROUTER 24/7</b>
 ━━━━━━━━━━━━━━━━━━
 Bấm trực tiếp vào các lệnh bên dưới để thực thi:
 
